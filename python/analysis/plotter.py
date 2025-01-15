@@ -112,10 +112,16 @@ class Plotter:
             stacked_hists = []
             unstacked_hists = []
             
-            # Process histograms
+            # Merge histograms from processes with same name
+            merged_hists = self._merge_histograms(hist)
+            
+            # Process merged histograms
+            processed_names = set()
             for proc in self.processes:
-                h = hist.histograms[proc.name].Clone()
-                h.Scale(proc.scale)
+                if proc.name in processed_names:
+                    continue
+                    
+                h = merged_hists[proc.name].Clone()
                 h.SetLineColor(proc.color)
                 h.SetLineWidth(2)
                 
@@ -125,8 +131,10 @@ class Plotter:
                     legend.AddEntry(h, proc.name, "f")
                 else:
                     h.SetFillStyle(0)
-                    unstacked_hists.append((h, h.Integral()))  # Store tuple of (hist, integral)
+                    unstacked_hists.append((h, h.Integral()))
                     legend.AddEntry(h, proc.name, "l")
+                    
+                processed_names.add(proc.name)
             
             # Sort unstacked histograms by integral (largest first)
             unstacked_hists.sort(key=lambda x: x[1], reverse=True)
@@ -339,3 +347,19 @@ class Plotter:
         h_ratio.GetYaxis().SetMaxDigits(2)
         h_ratio.GetXaxis().SetNdivisions(505)
         h_ratio.GetYaxis().SetNdivisions(505)
+
+    def _merge_histograms(self, hist: Histogram) -> Dict[str, ROOT.TH1F]:
+        """Merge histograms from processes with the same name."""
+        merged = {}
+        
+        # Group histograms by process name
+        for proc in self.processes:
+            if proc.name not in merged:
+                # Clone first histogram for this process
+                merged[proc.name] = hist.histograms[proc.name].Clone()
+            else:
+                # Add subsequent histograms
+                temp = hist.histograms[proc.name].Clone()
+                merged[proc.name].Add(temp)
+        
+        return merged

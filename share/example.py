@@ -4,32 +4,40 @@ from analysis.plotter import Plotter
 import ROOT
 
 # Create processes
-w_bm_veto = Process(
-    name="Wmunu_w_bm_veto",
-    file_path="/home/gkehris/workspace/LJNtupleMaker/run/w_BadMuonVeto/data-tree/mc23_13p6TeV.700780.Sh_2214_Wmunu_maxHTpTV2_BFilter.deriv.DAOD_PHYS.e8514_s4162_r14622_p6491.root",
+Wenu_wo_veto_1 = Process(
+    name="Wenu_wo_veto",
+    file_path="/data/gkehris/BadMuonVetoAnalysis/merged/no_veto/Sh_2214_Wenu_maxHTpTV2_CFilterBVeto_Run3_merged.root",
     tree_name="LJAlgo/nominal",
     color=ROOT.kRed+1,
     scale=1.0,
-    stack=False
+    stack=True
 )
 
-wo_bm_veto = Process(
-    name="Wmunu_wo_bm_veto",
-    file_path="/home/gkehris/workspace/LJNtupleMaker/run/wo_BadMuonVeto/data-tree/mc23_13p6TeV.700780.Sh_2214_Wmunu_maxHTpTV2_BFilter.deriv.DAOD_PHYS.e8514_s4162_r14622_p6491.root",
+Wenu_wo_veto_2 = Process(
+    name="Wenu_wo_veto",
+    file_path="/data/gkehris/BadMuonVetoAnalysis/merged/no_veto/Sh_2214_Wenu_maxHTpTV2_CVetoBVeto_Run3_merged.root",
+    tree_name="LJAlgo/nominal",
+    color=ROOT.kRed+1,
+    scale=1.0,
+    stack=True
+)
+
+Wtaunu_wo_veto_1 = Process(
+    name="Wtaunu_wo_veto",
+    file_path="/data/gkehris/BadMuonVetoAnalysis/merged/no_veto/Sh_2214_Wtaunu_maxHTpTV2_BFilter_Run3_merged.root",
     tree_name="LJAlgo/nominal",
     color=ROOT.kBlue+1,
     scale=1.0,
-    stack=False
+    stack=True
 )
-
 # Create ratio configuration
 ratio_config = RatioConfig(
-    numerator="Wmunu_w_bm_veto",
-    denominator="Wmunu_wo_bm_veto",
-    y_label="w/ veto / w/o veto",
-    y_min=0.95,
-    y_max=1.0,
-    error_option="B"  # Use binomial instead of standard error propagation
+    numerator="Wtaunu_wo_veto",
+    denominator="Wenu_wo_veto",
+    y_label="Wtaunu / Wenu",
+    y_min=0.1,
+    y_max=10.0,
+    error_option=""  # Use binomial instead of standard error propagation
 )
 
 # Create histogram configurations
@@ -74,8 +82,9 @@ mass_hist_no_pad = Histogram(
 # Create plotter and add processes and histograms
 plotter = Plotter()
 
-plotter.add_process(w_bm_veto)
-plotter.add_process(wo_bm_veto)
+plotter.add_process(Wenu_wo_veto_1)
+plotter.add_process(Wenu_wo_veto_2)
+plotter.add_process(Wtaunu_wo_veto_1)
 
 plotter.add_histogram(pt_hist)
 plotter.add_histogram(mass_hist)
