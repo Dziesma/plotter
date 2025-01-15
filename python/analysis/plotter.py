@@ -6,7 +6,7 @@ from .histogram import Histogram
 from .logger import package_logger
 
 class Plotter:
-    def __init__(self):
+    def __init__(self, weight: str = "1"):
         """Initialize the plotter with ATLAS style settings."""
         # Suppress ROOT info messages
         ROOT.gROOT.SetBatch(True)  # Run in batch mode
@@ -16,6 +16,7 @@ class Plotter:
         self.processes: List[Process] = []
         self.histograms: List[Histogram] = []
         self.output_dir = "plots"
+        self.weight = weight
         
         # Set ATLAS style
         self._set_atlas_style()
@@ -33,7 +34,7 @@ class Plotter:
     def add_histogram(self, histogram: Histogram) -> None:
         """Add a histogram configuration to the plotter."""
         self.histograms.append(histogram)
-    
+
     def run(self) -> None:
         """Process all histograms using RDataFrame."""
         actions = []
@@ -57,8 +58,14 @@ class Plotter:
                 if hist.selection:
                     df = df.Filter(hist.selection)
                 
-                # Book histogram
-                h = df.Histo1D(h_model, hist.variable)
+                # Use process-specific weight if specified, otherwise use plotter weight
+                weight = proc.weight if proc.weight else self.weight
+                
+                # Add weight as a column to the dataframe
+                df = df.Define("total_weight", weight)
+                
+                # Book histogram with weight column
+                h = df.Histo1D(h_model, hist.variable, "total_weight")
                 actions.append(h)
                 
                 # Store in histogram object
@@ -68,7 +75,7 @@ class Plotter:
         ROOT.RDF.RunGraphs(actions)
         self.logger.info("Histograms processed")
         
-        # Scale histograms and create plots
+        # Create plots
         self._make_plots()
         self.logger.info("All plots created")
     

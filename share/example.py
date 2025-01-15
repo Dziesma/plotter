@@ -9,7 +9,6 @@ Wenu_wo_veto_1 = Process(
     file_path="/data/gkehris/BadMuonVetoAnalysis/merged/no_veto/Sh_2214_Wenu_maxHTpTV2_CFilterBVeto_Run3_merged.root",
     tree_name="LJAlgo/nominal",
     color=ROOT.kRed+1,
-    scale=1.0,
     stack=True
 )
 
@@ -18,7 +17,6 @@ Wenu_wo_veto_2 = Process(
     file_path="/data/gkehris/BadMuonVetoAnalysis/merged/no_veto/Sh_2214_Wenu_maxHTpTV2_CVetoBVeto_Run3_merged.root",
     tree_name="LJAlgo/nominal",
     color=ROOT.kRed+1,
-    scale=1.0,
     stack=True
 )
 
@@ -27,7 +25,6 @@ Wtaunu_wo_veto_1 = Process(
     file_path="/data/gkehris/BadMuonVetoAnalysis/merged/no_veto/Sh_2214_Wtaunu_maxHTpTV2_BFilter_Run3_merged.root",
     tree_name="LJAlgo/nominal",
     color=ROOT.kBlue+1,
-    scale=1.0,
     stack=True
 )
 # Create ratio configuration
@@ -80,7 +77,7 @@ mass_hist_no_pad = Histogram(
 )
 
 # Create plotter and add processes and histograms
-plotter = Plotter()
+plotter = Plotter(weight="mcEventWeight*weight_gen*weight_lumi*weight_norm*weight_singleleptonTrigSF*weight_lepton*weight_pileup*weight_btag*weight_jvt*beamSpotWeight")
 
 plotter.add_process(Wenu_wo_veto_1)
 plotter.add_process(Wenu_wo_veto_2)
