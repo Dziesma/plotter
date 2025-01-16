@@ -8,7 +8,7 @@ class Process:
                  name: str,
                  file_path: str,
                  tree_name: str,
-                 color: int,
+                 color: int = 1,
                  weight: str = "",
                  stack: bool = True):
         """

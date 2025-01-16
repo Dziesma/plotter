@@ -1,11 +1,11 @@
-from typing import Optional, List, Union, Dict
+from typing import Optional, List, Union, Dict, Literal
 import ROOT
 from .process import Process
 
 class RatioConfig:
     def __init__(self, 
-                 numerator: str,
-                 denominator: str,
+                 numerator: Union[str, Literal["stack"]],
+                 denominator: Union[str, Literal["stack"]],
                  y_label: str = "Ratio",
                  y_min: float = 0.5,
                  y_max: float = 1.5,
@@ -14,8 +14,8 @@ class RatioConfig:
         Configure ratio panel settings.
         
         Args:
-            numerator: Name of numerator process
-            denominator: Name of denominator process
+            numerator: Name of numerator process or "stack" to use stack
+            denominator: Name of denominator process or "stack" to use stack
             y_label: Y-axis label
             y_min: Y-axis minimum
             y_max: Y-axis maximum
@@ -42,7 +42,9 @@ class Histogram:
                  y_min: Optional[float] = None,
                  selection: str = "",
                  log_y: bool = False,
-                 ratio_config: Optional[RatioConfig] = None):
+                 ratio_config: Optional[RatioConfig] = None,
+                 include_processes: Optional[List[str]] = None,
+                 exclude_processes: Optional[List[str]] = None):
         """
         Initialize a histogram configuration.
         
@@ -58,6 +60,8 @@ class Histogram:
             selection: Optional selection cut
             log_y: Use log scale for y-axis
             ratio_config: Ratio configuration
+            include_processes: List of process names to include (if None, include all)
+            exclude_processes: List of process names to exclude (if None, exclude none)
         """
         self.name = name
         self.variable = variable
@@ -70,6 +74,8 @@ class Histogram:
         self.selection = selection
         self.log_y = log_y
         self.ratio_config = ratio_config
+        self.include_processes = include_processes
+        self.exclude_processes = exclude_processes
         
         # Will store actual histograms
         self.histograms: Dict[str, ROOT.TH1F] = {}

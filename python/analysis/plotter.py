@@ -41,8 +41,20 @@ class Plotter:
         
         # Loop over all histogram configurations
         for hist in self.histograms:
-            # Loop over all processes
-            for proc in self.processes:
+            # Determine which processes to include
+            processes_to_use = []
+            if hist.include_processes is not None:
+                # Only include specified processes
+                processes_to_use = [p for p in self.processes if p.name in hist.include_processes]
+            elif hist.exclude_processes is not None:
+                # Include all processes except those specifieds
+                processes_to_use = [p for p in self.processes if p.name not in hist.exclude_processes]
+            else:
+                # Include all processes
+                processes_to_use = self.processes
+            
+            # Loop over selected processes
+            for proc in processes_to_use:
                 # Create histogram model
                 hist_name = f"{hist.name}_{proc.name}"
                 h_model = ROOT.RDF.TH1DModel(
@@ -151,7 +163,7 @@ class Plotter:
             for h in reversed(stacked_hists):
                 stack.Add(h)
             
-            # Draw
+            # Set log scale if configured
             if hist.ratio_config:
                 upper_pad.cd()
                 if hist.log_y:
@@ -198,18 +210,34 @@ class Plotter:
             if hist.ratio_config:
                 lower_pad.cd()
                 
-                # Get numerator and denominator histograms
-                h_num = hist.histograms[hist.ratio_config.numerator].Clone()
-                h_den = hist.histograms[hist.ratio_config.denominator].Clone()
+                # Get numerator histogram
+                if hist.ratio_config.numerator == "stack":
+                    if not stacked_hists:
+                        self.logger.error("Stack requested for ratio numerator but no stacked histograms found")
+                        continue
+                    h_num = stacked_hists[0].Clone()
+                    for h in stacked_hists[1:]:
+                        h_num.Add(h)
+                else:
+                    h_num = merged_hists[hist.ratio_config.numerator].Clone()
+                
+                # Get denominator histogram
+                if hist.ratio_config.denominator == "stack":
+                    if not stacked_hists:
+                        self.logger.error("Stack requested for ratio denominator but no stacked histograms found")
+                        continue
+                    h_den = stacked_hists[0].Clone()
+                    for h in stacked_hists[1:]:
+                        h_den.Add(h)
+                else:
+                    h_den = merged_hists[hist.ratio_config.denominator].Clone()
                 
                 # Create ratio histogram
                 h_ratio = h_num.Clone("ratio")
                 h_ratio.Divide(h_num, h_den, 1.0, 1.0, hist.ratio_config.error_option)
                 
-                # Configure ratio plot
+                # Configure and draw ratio plot
                 self._configure_ratio_plot(h_ratio, hist)
-                
-                # Draw ratio
                 h_ratio.Draw("EP")
                 
                 # Draw horizontal line at 1

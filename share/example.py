@@ -38,12 +38,12 @@ Zjets_mc23d_no_veto = Process(
 
 # Create ratio configuration
 ratio_config = RatioConfig(
-    numerator="Zjets_Run3_no_veto",
-    denominator="Wjets_Run3_no_veto",
-    y_label="Zjets / Wjets",
-    y_min=0.1,
-    y_max=2.0,
-    error_option=""  # Use binomial instead of standard error propagation
+    numerator="Wjets_Run3_no_veto",
+    denominator="stack",
+    y_label="Wjets/total",
+    y_min=0.0,
+    y_max=1.0,
+    error_option="B"  # "B" for binomial, "" for standard error propagation
 )
 
 # Create histogram configurations
