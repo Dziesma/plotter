@@ -4,32 +4,46 @@ from analysis.plotter import Plotter
 import ROOT
 
 # Create processes
-w_bm_veto = Process(
-    name="Wmunu_w_bm_veto",
-    file_path="/home/gkehris/workspace/LJNtupleMaker/run/w_BadMuonVeto/data-tree/mc23_13p6TeV.700780.Sh_2214_Wmunu_maxHTpTV2_BFilter.deriv.DAOD_PHYS.e8514_s4162_r14622_p6491.root",
+Wjets_mc23a_no_veto = Process(
+    name="Wjets_Run3_no_veto",
+    file_path="/data/gkehris/BadMuonVetoAnalysis/merged/no_veto/Wjets_mc23a_Run3_merged.root",
     tree_name="LJAlgo/nominal",
     color=ROOT.kRed+1,
-    scale=1.0,
-    stack=False
+    stack=True
 )
 
-wo_bm_veto = Process(
-    name="Wmunu_wo_bm_veto",
-    file_path="/home/gkehris/workspace/LJNtupleMaker/run/wo_BadMuonVeto/data-tree/mc23_13p6TeV.700780.Sh_2214_Wmunu_maxHTpTV2_BFilter.deriv.DAOD_PHYS.e8514_s4162_r14622_p6491.root",
+Wjets_mc23d_no_veto = Process(
+    name="Wjets_Run3_no_veto",
+    file_path="/data/gkehris/BadMuonVetoAnalysis/merged/no_veto/Wjets_mc23d_Run3_merged.root",
+    tree_name="LJAlgo/nominal",
+    color=ROOT.kRed+1,
+    stack=True
+)
+
+Zjets_mc23a_no_veto = Process(
+    name="Zjets_Run3_no_veto",
+    file_path="/data/gkehris/BadMuonVetoAnalysis/merged/no_veto/Zjets_mc23a_Run3_merged.root",
     tree_name="LJAlgo/nominal",
     color=ROOT.kBlue+1,
-    scale=1.0,
-    stack=False
+    stack=True
+)
+
+Zjets_mc23d_no_veto = Process(
+    name="Zjets_Run3_no_veto",
+    file_path="/data/gkehris/BadMuonVetoAnalysis/merged/no_veto/Zjets_mc23d_Run3_merged.root",
+    tree_name="LJAlgo/nominal",
+    color=ROOT.kBlue+1,
+    stack=True
 )
 
 # Create ratio configuration
 ratio_config = RatioConfig(
-    numerator="Wmunu_w_bm_veto",
-    denominator="Wmunu_wo_bm_veto",
-    y_label="w/ veto / w/o veto",
-    y_min=0.95,
+    numerator="Wjets_Run3_no_veto",
+    denominator="stack",
+    y_label="Wjets/total",
+    y_min=0.0,
     y_max=1.0,
-    error_option="B"  # Use binomial instead of standard error propagation
+    error_option="B"  # "B" for binomial, "" for standard error propagation
 )
 
 # Create histogram configurations
@@ -72,10 +86,12 @@ mass_hist_no_pad = Histogram(
 )
 
 # Create plotter and add processes and histograms
-plotter = Plotter()
+plotter = Plotter(weight="mcEventWeight*weight_gen*weight_lumi*weight_norm*weight_singleleptonTrigSF*weight_lepton*weight_pileup*weight_btag*weight_jvt*beamSpotWeight")
 
-plotter.add_process(w_bm_veto)
-plotter.add_process(wo_bm_veto)
+plotter.add_process(Wjets_mc23a_no_veto)
+plotter.add_process(Wjets_mc23d_no_veto)
+plotter.add_process(Zjets_mc23a_no_veto)
+plotter.add_process(Zjets_mc23d_no_veto)
 
 plotter.add_histogram(pt_hist)
 plotter.add_histogram(mass_hist)

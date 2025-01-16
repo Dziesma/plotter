@@ -8,8 +8,8 @@ class Process:
                  name: str,
                  file_path: str,
                  tree_name: str,
-                 color: int,
-                 scale: float = 1.0,
+                 color: int = 1,
+                 weight: str = "",
                  stack: bool = True):
         """
         Initialize a physics process.
@@ -19,7 +19,7 @@ class Process:
             file_path: Path to ROOT file
             tree_name: Path of the TTree in the ROOT file
             color: ROOT color code for plotting
-            scale: Scale factor (e.g., luminosity * cross-section)
+            weight: Weight expression (overrides plotter weight if specified)
             stack: Whether to include in stack (False for data/signal)
         """
         self.logger = package_logger.get_logger(f"process.{name}")
@@ -27,7 +27,7 @@ class Process:
         self.file_path = os.path.expandvars(file_path)
         self.tree_name = tree_name
         self.color = color
-        self.scale = scale
+        self.weight = weight
         self.stack = stack
         
         # Create RDataFrame

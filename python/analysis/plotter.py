@@ -6,7 +6,7 @@ from .histogram import Histogram
 from .logger import package_logger
 
 class Plotter:
-    def __init__(self):
+    def __init__(self, weight: str = "1"):
         """Initialize the plotter with ATLAS style settings."""
         # Suppress ROOT info messages
         ROOT.gROOT.SetBatch(True)  # Run in batch mode
@@ -16,6 +16,7 @@ class Plotter:
         self.processes: List[Process] = []
         self.histograms: List[Histogram] = []
         self.output_dir = "plots"
+        self.weight = weight
         
         # Set ATLAS style
         self._set_atlas_style()
@@ -33,15 +34,27 @@ class Plotter:
     def add_histogram(self, histogram: Histogram) -> None:
         """Add a histogram configuration to the plotter."""
         self.histograms.append(histogram)
-    
+
     def run(self) -> None:
         """Process all histograms using RDataFrame."""
         actions = []
         
         # Loop over all histogram configurations
         for hist in self.histograms:
-            # Loop over all processes
-            for proc in self.processes:
+            # Determine which processes to include
+            processes_to_use = []
+            if hist.include_processes is not None:
+                # Only include specified processes
+                processes_to_use = [p for p in self.processes if p.name in hist.include_processes]
+            elif hist.exclude_processes is not None:
+                # Include all processes except those specifieds
+                processes_to_use = [p for p in self.processes if p.name not in hist.exclude_processes]
+            else:
+                # Include all processes
+                processes_to_use = self.processes
+            
+            # Loop over selected processes
+            for proc in processes_to_use:
                 # Create histogram model
                 hist_name = f"{hist.name}_{proc.name}"
                 h_model = ROOT.RDF.TH1DModel(
@@ -57,8 +70,14 @@ class Plotter:
                 if hist.selection:
                     df = df.Filter(hist.selection)
                 
-                # Book histogram
-                h = df.Histo1D(h_model, hist.variable)
+                # Use process-specific weight if specified, otherwise use plotter weight
+                weight = proc.weight if proc.weight else self.weight
+                
+                # Add weight as a column to the dataframe
+                df = df.Define("total_weight", weight)
+                
+                # Book histogram with weight column
+                h = df.Histo1D(h_model, hist.variable, "total_weight")
                 actions.append(h)
                 
                 # Store in histogram object
@@ -68,7 +87,7 @@ class Plotter:
         ROOT.RDF.RunGraphs(actions)
         self.logger.info("Histograms processed")
         
-        # Scale histograms and create plots
+        # Create plots
         self._make_plots()
         self.logger.info("All plots created")
     
@@ -112,10 +131,16 @@ class Plotter:
             stacked_hists = []
             unstacked_hists = []
             
-            # Process histograms
+            # Merge histograms from processes with same name
+            merged_hists = self._merge_histograms(hist)
+            
+            # Process merged histograms
+            processed_names = set()
             for proc in self.processes:
-                h = hist.histograms[proc.name].Clone()
-                h.Scale(proc.scale)
+                if proc.name in processed_names:
+                    continue
+                    
+                h = merged_hists[proc.name].Clone()
                 h.SetLineColor(proc.color)
                 h.SetLineWidth(2)
                 
@@ -125,8 +150,10 @@ class Plotter:
                     legend.AddEntry(h, proc.name, "f")
                 else:
                     h.SetFillStyle(0)
-                    unstacked_hists.append((h, h.Integral()))  # Store tuple of (hist, integral)
+                    unstacked_hists.append((h, h.Integral()))
                     legend.AddEntry(h, proc.name, "l")
+                    
+                processed_names.add(proc.name)
             
             # Sort unstacked histograms by integral (largest first)
             unstacked_hists.sort(key=lambda x: x[1], reverse=True)
@@ -136,7 +163,7 @@ class Plotter:
             for h in reversed(stacked_hists):
                 stack.Add(h)
             
-            # Draw
+            # Set log scale if configured
             if hist.ratio_config:
                 upper_pad.cd()
                 if hist.log_y:
@@ -183,18 +210,34 @@ class Plotter:
             if hist.ratio_config:
                 lower_pad.cd()
                 
-                # Get numerator and denominator histograms
-                h_num = hist.histograms[hist.ratio_config.numerator].Clone()
-                h_den = hist.histograms[hist.ratio_config.denominator].Clone()
+                # Get numerator histogram
+                if hist.ratio_config.numerator == "stack":
+                    if not stacked_hists:
+                        self.logger.error("Stack requested for ratio numerator but no stacked histograms found")
+                        continue
+                    h_num = stacked_hists[0].Clone()
+                    for h in stacked_hists[1:]:
+                        h_num.Add(h)
+                else:
+                    h_num = merged_hists[hist.ratio_config.numerator].Clone()
+                
+                # Get denominator histogram
+                if hist.ratio_config.denominator == "stack":
+                    if not stacked_hists:
+                        self.logger.error("Stack requested for ratio denominator but no stacked histograms found")
+                        continue
+                    h_den = stacked_hists[0].Clone()
+                    for h in stacked_hists[1:]:
+                        h_den.Add(h)
+                else:
+                    h_den = merged_hists[hist.ratio_config.denominator].Clone()
                 
                 # Create ratio histogram
                 h_ratio = h_num.Clone("ratio")
                 h_ratio.Divide(h_num, h_den, 1.0, 1.0, hist.ratio_config.error_option)
                 
-                # Configure ratio plot
+                # Configure and draw ratio plot
                 self._configure_ratio_plot(h_ratio, hist)
-                
-                # Draw ratio
                 h_ratio.Draw("EP")
                 
                 # Draw horizontal line at 1
@@ -339,3 +382,19 @@ class Plotter:
         h_ratio.GetYaxis().SetMaxDigits(2)
         h_ratio.GetXaxis().SetNdivisions(505)
         h_ratio.GetYaxis().SetNdivisions(505)
+
+    def _merge_histograms(self, hist: Histogram) -> Dict[str, ROOT.TH1F]:
+        """Merge histograms from processes with the same name."""
+        merged = {}
+        
+        # Group histograms by process name
+        for proc in self.processes:
+            if proc.name not in merged:
+                # Clone first histogram for this process
+                merged[proc.name] = hist.histograms[proc.name].Clone()
+            else:
+                # Add subsequent histograms
+                temp = hist.histograms[proc.name].Clone()
+                merged[proc.name].Add(temp)
+        
+        return merged
