@@ -62,7 +62,7 @@ pt_hist = Histogram(
 
 mass_hist = Histogram(
     name="invariant_mass",
-    variable="mLepJet", # "sqrt(2 * lepton1_pt * jet1_pt * (cosh(lepton1_eta - jet1_eta) - cos(lepton1_phi - jet1_phi)))",
+    variable="sqrt(2 * lepton1_pt * jet1_pt * (cosh(lepton1_eta - jet1_eta) - cos(lepton1_phi - jet1_phi)))",
     bins=16,
     x_min=0,
     x_max=4000,

@@ -73,11 +73,12 @@ class Plotter:
                 # Use process-specific weight if specified, otherwise use plotter weight
                 weight = proc.weight if proc.weight else self.weight
                 
-                # Add weight as a column to the dataframe
+                # Add weight and variable as columns to the dataframe
                 df = df.Define("total_weight", weight)
+                df = df.Define("plot_var", hist.variable)
                 
-                # Book histogram with weight column
-                h = df.Histo1D(h_model, hist.variable, "total_weight")
+                # Book histogram with defined columns
+                h = df.Histo1D(h_model, "plot_var", "total_weight")
                 actions.append(h)
                 
                 # Store in histogram object
