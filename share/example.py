@@ -4,36 +4,45 @@ from analysis.plotter import Plotter
 import ROOT
 
 # Create processes
-Wenu_wo_veto_1 = Process(
-    name="Wenu_wo_veto",
-    file_path="/data/gkehris/BadMuonVetoAnalysis/merged/no_veto/Sh_2214_Wenu_maxHTpTV2_CFilterBVeto_Run3_merged.root",
+Wjets_mc23a_no_veto = Process(
+    name="Wjets_Run3_no_veto",
+    file_path="/data/gkehris/BadMuonVetoAnalysis/merged/no_veto/Wjets_mc23a_Run3_merged.root",
     tree_name="LJAlgo/nominal",
     color=ROOT.kRed+1,
     stack=True
 )
 
-Wenu_wo_veto_2 = Process(
-    name="Wenu_wo_veto",
-    file_path="/data/gkehris/BadMuonVetoAnalysis/merged/no_veto/Sh_2214_Wenu_maxHTpTV2_CVetoBVeto_Run3_merged.root",
+Wjets_mc23d_no_veto = Process(
+    name="Wjets_Run3_no_veto",
+    file_path="/data/gkehris/BadMuonVetoAnalysis/merged/no_veto/Wjets_mc23d_Run3_merged.root",
     tree_name="LJAlgo/nominal",
     color=ROOT.kRed+1,
     stack=True
 )
 
-Wtaunu_wo_veto_1 = Process(
-    name="Wtaunu_wo_veto",
-    file_path="/data/gkehris/BadMuonVetoAnalysis/merged/no_veto/Sh_2214_Wtaunu_maxHTpTV2_BFilter_Run3_merged.root",
+Zjets_mc23a_no_veto = Process(
+    name="Zjets_Run3_no_veto",
+    file_path="/data/gkehris/BadMuonVetoAnalysis/merged/no_veto/Zjets_mc23a_Run3_merged.root",
     tree_name="LJAlgo/nominal",
     color=ROOT.kBlue+1,
     stack=True
 )
+
+Zjets_mc23d_no_veto = Process(
+    name="Zjets_Run3_no_veto",
+    file_path="/data/gkehris/BadMuonVetoAnalysis/merged/no_veto/Zjets_mc23d_Run3_merged.root",
+    tree_name="LJAlgo/nominal",
+    color=ROOT.kBlue+1,
+    stack=True
+)
+
 # Create ratio configuration
 ratio_config = RatioConfig(
-    numerator="Wtaunu_wo_veto",
-    denominator="Wenu_wo_veto",
-    y_label="Wtaunu / Wenu",
+    numerator="Zjets_Run3_no_veto",
+    denominator="Wjets_Run3_no_veto",
+    y_label="Zjets / Wjets",
     y_min=0.1,
-    y_max=10.0,
+    y_max=2.0,
     error_option=""  # Use binomial instead of standard error propagation
 )
 
@@ -79,9 +88,10 @@ mass_hist_no_pad = Histogram(
 # Create plotter and add processes and histograms
 plotter = Plotter(weight="mcEventWeight*weight_gen*weight_lumi*weight_norm*weight_singleleptonTrigSF*weight_lepton*weight_pileup*weight_btag*weight_jvt*beamSpotWeight")
 
-plotter.add_process(Wenu_wo_veto_1)
-plotter.add_process(Wenu_wo_veto_2)
-plotter.add_process(Wtaunu_wo_veto_1)
+plotter.add_process(Wjets_mc23a_no_veto)
+plotter.add_process(Wjets_mc23d_no_veto)
+plotter.add_process(Zjets_mc23a_no_veto)
+plotter.add_process(Zjets_mc23d_no_veto)
 
 plotter.add_histogram(pt_hist)
 plotter.add_histogram(mass_hist)
