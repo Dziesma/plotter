@@ -281,82 +281,32 @@ class Plotter:
             self._draw_atlas_label(has_ratio=bool(hist.ratio_config))
             
             # Handle ratio plot if configured
-            if hist.ratio_config: #TODO: move parts to separate functions
+            if hist.ratio_config:
                 lower_pad.cd()
                 
-                # Get numerator histogram
+                # Retrieve numerator histogram
                 if hist.ratio_config.numerator == "stack":
-                    if not stacked_hists:
-                        self.logger.error("Stack requested for ratio numerator but no stacked histograms found")
-                        continue
-                    h_num = stacked_hists[0].Clone()
-                    for h in stacked_hists[1:]:
-                        h_num.Add(h)
+                    h_num = cached_stack_total.Clone()
                 else:
-                    h_num = hist.merged_histograms[hist.ratio_config.numerator].Clone()
-                
-                # Get denominator histogram
-                if hist.ratio_config.denominator == "stack":
-                    if not stacked_hists:
-                        self.logger.error("Stack requested for ratio denominator but no stacked histograms found")
-                        continue
-                    h_den = stacked_hists[0].Clone()
-                    for h in stacked_hists[1:]:
-                        h_den.Add(h)
-                else:
-                    h_den = hist.merged_histograms[hist.ratio_config.denominator].Clone()
-                
-                # Create ratio histogram
-                h_ratio = h_num.Clone("ratio")
-                h_ratio.Divide(h_num, h_den, 1.0, 1.0, hist.ratio_config.error_option) #TODO: error_option not using denominator error
-                
-                # Configure ratio panel axes
-                self._configure_ratio_axes(h_ratio, hist)
-                
-                # Draw ratio points using numerator process style
-                if hist.ratio_config.numerator == "stack":
-                    error_style = hist.stack_error_style
-                    if error_style == ErrorBandStyle.POINTS:
-                        h_ratio.SetMarkerColor(ROOT.kGray)
-                        h_ratio.SetLineColor(ROOT.kGray)
-                        h_ratio.Draw("E X0")
-                    elif error_style == ErrorBandStyle.HATCHED:
-                        self.logger.error("Hatched error style not yet implemented for stack numerator ratio plots")
-                        continue
-                    else:
-                        self.logger.error(f"Invalid error style: {error_style}")
-                        continue
-                else:
-                    proc = next(p for p in self.unique_processes if p.name == hist.ratio_config.numerator)
-                    if proc.error_style == ErrorBandStyle.POINTS:
-                        h_ratio.SetMarkerStyle(20)
-                        h_ratio.SetMarkerColor(proc.color)
-                        h_ratio.Draw("E X0")
-                    elif proc.error_style == ErrorBandStyle.HATCHED:
-                        self.logger.error("Hatched error style not yet implemented for process-specific ratio plots")
-                        continue
-                    else:
-                        self.logger.error(f"Invalid error style: {proc.error_style}")
-                        continue
+                    h_num = next(hist.merged_histograms[p.name] for p in self.unique_processes if p.name == hist.ratio_config.numerator)
+                    if not h_num:
+                        self.logger.error(f"Numerator process {hist.ratio_config.numerator} not found in merged histograms for hist {hist.name}")
 
-                # Draw stack errors centered at 1.0 if denominator is stack
+                # Retrieve denominator histogram
                 if hist.ratio_config.denominator == "stack":
-                    h_stack_errors = h_den.Clone()
-                    for i in range(1, h_stack_errors.GetNbinsX() + 1):
-                        if h_stack_errors.GetBinContent(i) > 0:
-                            h_stack_errors.SetBinContent(i, 1.0)
-                            h_stack_errors.SetBinError(i, h_den.GetBinError(i) / h_den.GetBinContent(i))
-                    h_stack_errors.SetFillColor(ROOT.kBlack)
-                    h_stack_errors.SetFillStyle(3004)
-                    h_stack_errors.SetMarkerStyle(0)
-                    h_stack_errors.SetMarkerSize(0)
-                    h_stack_errors.Draw("E2 SAME")
-                
-                    # Draw horizontal line at 1
-                    line = ROOT.TLine(hist.x_min, 1, hist.x_max, 1)
-                    line.SetLineStyle(2)
-                    line.Draw("SAME")
-            
+                    h_den = cached_stack_total.Clone()
+                else:
+                    h_den = next(hist.merged_histograms[p.name] for p in self.unique_processes if p.name == hist.ratio_config.denominator)
+                    if not h_den:
+                        self.logger.error(f"Denominator process {hist.ratio_config.denominator} not found in merged histograms for hist {hist.name}")
+       
+                # Draw ratio histogram and configure axes
+                if h_num and h_den:
+                    cached_ratio, cached_stack_ratio_errors = self._draw_ratio_points(hist, h_num, h_den)
+                    self._configure_ratio_axes(cached_ratio, hist)
+                else:
+                    self.logger.error(f"Ratio configuration for hist {hist.name} is invalid. Skipping ratio plot.")
+                    
             # Save canvas
             canvas.Update()
             canvas.SaveAs(f"{self.output_dir}/{hist.name}.pdf")
@@ -448,7 +398,7 @@ class Plotter:
 
         # Draw stack error bands
         if hist.stack_error_style == ErrorBandStyle.NONE:
-            return total_hist
+            return stack, total_hist
         elif hist.stack_error_style == ErrorBandStyle.HATCHED:
             total_hist.SetLineWidth(0)
             total_hist.SetMarkerSize(0)
@@ -456,9 +406,12 @@ class Plotter:
             total_hist.SetFillColor(ROOT.kBlack)
             draw_option = "E2 SAME"
             legend_option = "f"
+        elif hist.stack_error_style == ErrorBandStyle.POINTS:
+            self.logger.error(f"Invalid stack errror style: POINTS for hist {hist.name}. Won't draw stack error bands.")
+            return stack, total_hist
         else:
             self.logger.error(f"Invalid stack error style: {hist.stack_error_style} for hist {hist.name}. Won't draw stack error bands.")
-            return total_hist 
+            return stack, total_hist
         total_hist.Draw(draw_option)
         legend.AddEntry(total_hist, "Stat. Unc.", legend_option)
         
@@ -477,7 +430,7 @@ class Plotter:
             elif proc.error_style == ErrorBandStyle.HATCHED:
                 draw_options = "HIST"   
                 legend_option = "l"
-                self.logger.error(f"Error band style {proc.error_style} not yet implemented for unstacked histograms. Drawing with error band style NONE.")
+                self.logger.error(f"Error band style {proc.error_style} not implemented for unstacked histograms. Drawing with error band style NONE.")
             elif proc.error_style == ErrorBandStyle.POINTS:
                 draw_options = "E X0"
                 legend_option = "p"
@@ -546,6 +499,71 @@ class Plotter:
         label.DrawLatex(x, y, "ATLAS")
         label.SetTextFont(42)
         label.DrawLatex(x + spacing, y, text)
+
+    
+    def _draw_ratio_points(self, hist, h_num, h_den) -> Tuple[ROOT.TH1F, ROOT.TH1F]:
+        """Draw ratio points using numerator process' style."""
+
+        # Create ratio histogram
+        h_ratio = h_num.Clone("ratio")
+        h_ratio.Divide(h_num, h_den, 1.0, 1.0, hist.ratio_config.error_option) #TODO: error_option not using denominator error
+
+        # Draw ratio histogram
+        if hist.ratio_config.numerator == "stack":
+            if hist.stack_error_style == ErrorBandStyle.NONE:
+                h_ratio.SetLineColor(ROOT.kGray)
+                h_ratio.SetMarkerSize(0)
+                h_ratio.Draw()
+            elif hist.stack_error_style == ErrorBandStyle.HATCHED:
+                h_ratio.SetLineWidth(0)
+                h_ratio.SetMarkerColor(ROOT.kGray)
+                h_ratio.Draw("E X0")
+            elif hist.stack_error_style == ErrorBandStyle.POINTS:
+                self.logger.error(f"Invalid stack error style: POINTS for ratio panel of hist {hist.name}. Won't draw stack error bands.")
+                h_ratio.SetLineColor(ROOT.kGray)
+                h_ratio.SetMarkerSize(0)
+                h_ratio.Draw()
+            else:
+                self.logger.error(f"Invalid stack error style: {hist.stack_error_style} for ratio panel of hist {hist.name}. Won't draw stack error bands.")
+                h_ratio.SetLineColor(ROOT.kGray)
+                h_ratio.SetMarkerSize(0)
+                h_ratio.Draw()
+        else:
+            proc = next(p for p in self.unique_processes if p.name == hist.ratio_config.numerator)
+            if proc.error_style == ErrorBandStyle.NONE:
+                h_ratio.SetMarkerSize(0)
+                h_ratio.Draw()
+            elif proc.error_style == ErrorBandStyle.HATCHED:
+                self.logger.error(f"Hatched error style not yet implemented for process-specific ratio plots. Won't draw error bands.")
+                h_ratio.SetMarkerSize(0)
+                h_ratio.Draw()
+            elif proc.error_style == ErrorBandStyle.POINTS:
+                h_ratio.Draw("E X0")
+            else:
+                self.logger.error(f"Invalid error style: {proc.error_style} for ratio panel of hist {hist.name}. Won't draw error bands.")
+                h_ratio.SetMarkerSize(0)
+                h_ratio.Draw()
+
+        # Draw stack errors centered at 1.0 if denominator is stack
+        h_stack_errors = None
+        if hist.ratio_config.denominator == "stack":
+            h_stack_errors = h_den.Clone()
+            for i in range(1, h_stack_errors.GetNbinsX() + 1):
+                if h_stack_errors.GetBinContent(i) > 0:
+                    h_stack_errors.SetBinContent(i, 1.0)
+                    h_stack_errors.SetBinError(i, h_den.GetBinError(i) / h_den.GetBinContent(i))
+            h_stack_errors.SetFillColor(ROOT.kBlack)
+            h_stack_errors.SetFillStyle(3004)
+            h_stack_errors.SetMarkerStyle(0)
+            h_stack_errors.SetMarkerSize(0)
+            h_stack_errors.Draw("E2 SAME")
+        
+            # Draw horizontal line at 1
+            line = ROOT.TLine(hist.x_min, 1, hist.x_max, 1)
+            line.SetLineStyle(2)
+            line.Draw("SAME")
+
+        return h_ratio, h_stack_errors
     
     
     def _configure_ratio_axes(self, h_ratio, hist) -> None:
