@@ -9,7 +9,7 @@ Wjets_mc23a_no_veto = Process(
     name="Wjets_Run3_no_veto",
     file_path="/data/gkehris/BadMuonVetoAnalysis/merged/no_veto/Wjets_mc23a_Run3_merged.root",
     tree_name="LJAlgo/nominal",
-    color=ROOT.kRed+1,
+    color=ROOT.kRed,
     stack=True
 )
 
@@ -17,7 +17,7 @@ Wjets_mc23d_no_veto = Process(
     name="Wjets_Run3_no_veto",
     file_path="/data/gkehris/BadMuonVetoAnalysis/merged/no_veto/Wjets_mc23d_Run3_merged.root",
     tree_name="LJAlgo/nominal",
-    color=ROOT.kRed+1,
+    color=ROOT.kRed,
     stack=True
 )
 
@@ -25,7 +25,7 @@ Zjets_mc23a_no_veto = Process(
     name="Zjets_Run3_no_veto",
     file_path="/data/gkehris/BadMuonVetoAnalysis/merged/no_veto/Zjets_mc23a_Run3_merged.root",
     tree_name="LJAlgo/nominal",
-    color=ROOT.kBlue+1,
+    color=ROOT.kBlue,
     stack=True,
     error_style="points"
 )
@@ -34,7 +34,7 @@ Zjets_mc23d_no_veto = Process(
     name="Zjets_Run3_no_veto",
     file_path="/data/gkehris/BadMuonVetoAnalysis/merged/no_veto/Zjets_mc23d_Run3_merged.root",
     tree_name="LJAlgo/nominal",
-    color=ROOT.kBlue+1,
+    color=ROOT.kBlue,
     stack=True,
     error_style="points"
 )
@@ -111,7 +111,7 @@ mass_hist = Histogram(
 )
 
 # Create plotter and add processes and histograms
-plotter = Plotter(weight="mcEventWeight*weight_gen*weight_lumi*weight_norm*weight_singleleptonTrigSF*weight_lepton*weight_pileup*weight_btag*weight_jvt*beamSpotWeight", output_dir="run3") #"mcEventWeight*weight_gen*weight_lumi*weight_norm*weight_singleleptonTrigSF*weight_lepton*weight_pileup*weight_btag*weight_jvt*beamSpotWeight")
+plotter = Plotter(weight="mcEventWeight*weight_gen*weight_lumi*weight_norm*weight_singleleptonTrigSF*weight_lepton*weight_pileup*weight_btag*weight_jvt*beamSpotWeight", output_dir="test")
 
 plotter.add_process(Wjets_mc23a_no_veto)
 plotter.add_process(Wjets_mc23d_no_veto)
