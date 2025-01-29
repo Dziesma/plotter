@@ -2,8 +2,9 @@ from typing import Optional, List, Dict, Union, Tuple
 import ROOT
 import os
 import logging
-from .process import Process, ProcessTemplate
+from .region import Region
 from .histogram import Histogram
+from .process import Process, ProcessTemplate
 from .styles import ErrorBandStyle
 from .logger import package_logger
 
@@ -22,14 +23,41 @@ class Plotter:
         ROOT.gErrorIgnoreLevel = ROOT.kWarning  # Only show warnings and above
 
         # Set up processes and histograms
+        self.regions: List[Region] = []
+        self.histograms: List[Histogram] = []
         self.processes: List[Process] = []
         self.unique_processes: List[ProcessTemplate] = []
-        self.histograms: List[Histogram] = []
         self.output_dir = output_dir
         self.weight = weight
         
         # Set ATLAS style
         self._set_atlas_style()
+    
+
+    def add_region(self, region: Region) -> None:
+        """Add a region to the plotter."""
+
+        # Check if the region is already in the plotter
+        if region.name in [r.name for r in self.regions]:
+            self.logger.warning(f"Region {region.name} already exists. Will overwrite.")
+            self.regions = [r for r in self.regions if r.name != region.name]
+
+        # Add the region to the plotter
+        self.regions.append(region)
+        self.logger.info(f"Added region {region.name} to plotter")
+        
+
+    def add_histogram(self, histogram: Histogram) -> None:
+        """Add a histogram configuration to the plotter."""
+
+        # Check if the histogram is already in the plotter
+        if histogram.name in [h.name for h in self.histograms]:
+            self.logger.warning(f"Histogram {histogram.name} already exists in plotter. Will overwrite existing histogram.")
+            self.histograms = [h for h in self.histograms if h.name != histogram.name]
+
+        # Add the histogram to the plotter
+        self.histograms.append(histogram)
+        self.logger.info(f"Added histogram {histogram.name} to plotter")
 
     
     def add_process(self, process: Process) -> None:
@@ -52,28 +80,20 @@ class Plotter:
         # Add the process to the plotter
         self.processes.append(process)
         self.logger.info(f"Added process {process.name} from {process.file_path}:{process.tree_name} to plotter")
-    
-    
-    def add_histogram(self, histogram: Histogram) -> None:
-        """Add a histogram configuration to the plotter."""
-
-        # Check if the histogram is already in the plotter
-        if histogram.name in [h.name for h in self.histograms]:
-            self.logger.warning(f"Histogram {histogram.name} already exists in plotter. Will overwrite existing histogram.")
-            self.histograms = [h for h in self.histograms if h.name != histogram.name]
-
-        # Add the histogram to the plotter
-        self.histograms.append(histogram)
-        self.logger.info(f"Added histogram {histogram.name} to plotter")
 
 
     def run(self) -> None:
         """Full pipeline ntuples to fancy plots."""
-  
+
         # Create output directory
         if os.path.exists(self.output_dir):
             self.logger.warning(f"Output directory {self.output_dir} already exists. Plots will be saved in this directory.")
         os.makedirs(self.output_dir, exist_ok=True) 
+
+        # Setup default region if none specified
+        if not self.regions:
+            self.logger.info("No regions specified. Adding default region 'nominal'.")
+            self.regions.append(Region("nominal", ""))
 
         # Make hists
         self._make_hists()
@@ -85,9 +105,10 @@ class Plotter:
 
         output_file = ROOT.TFile(os.path.join(self.output_dir, "merged_histograms.root"), "RECREATE")
         for hist in self.histograms:
-            for proc in self.unique_processes:
-                if proc.name in hist.merged_histograms:
-                    hist.merged_histograms[proc.name].Write(f"{hist.name}_{proc.name}")
+            for region in hist.merged_histograms:   
+                for proc in self.unique_processes:
+                    if proc.name in hist.merged_histograms[region]:
+                        hist.merged_histograms[region][proc.name].Write(f"{region}_{hist.name}_{proc.name}")
         output_file.Close()
         self.logger.info("Merged histograms saved to merged_histograms.root")
 
@@ -152,50 +173,55 @@ class Plotter:
         """Process all histograms using RDataFrame."""
         actions = []
         
-        # Loop over all histogram configurations
-        for hist in self.histograms:
-            # Determine which processes to include
-            processes_to_use = []
-            if hist.include_processes is not None:
-                # Only include specified processes
-                processes_to_use = [p for p in self.processes if p.name in hist.include_processes]
-            elif hist.exclude_processes is not None:
-                # Include all processes except those specifieds
-                processes_to_use = [p for p in self.processes if p.name not in hist.exclude_processes]
-            else:
-                # Include all processes
-                processes_to_use = self.processes
-            
-            # Loop over selected processes
-            for proc in processes_to_use:
-                # Create histogram model
-                hist_name = f"{hist.name}_{proc.name}"
-                h_model = ROOT.RDF.TH1DModel(
-                    hist_name,
-                    "",
-                    hist.bins,
-                    hist.x_min,
-                    hist.x_max
-                )
+        # Loop over all regions
+        for region in self.regions:
+
+            # Filter histograms
+            histograms_to_use = self._filter_histograms(self.histograms, region.include_histograms, region.exclude_histograms)
+            if not histograms_to_use:
+                self.logger.warning(f"No histograms found after filtering region {region.name}. Skipping region. This region is pointless")
+                continue
+
+            # Filter processes
+            processes_to_use = self._filter_processes(self.processes, region.include_processes, region.exclude_processes)
+            if not processes_to_use:
+                self.logger.warning(f"No processes found after filtering region {region.name}. Skipping region as all histograms would be 0. This region is pointless")
+                continue
+
+            # Loop over filtered histogram configurations
+            for hist in histograms_to_use:
                 
-                # Apply selection if any
-                df = proc.df
-                if hist.selection:
-                    df = df.Filter(hist.selection)
-                
-                # Use process-specific weight if specified, otherwise use plotter weight
-                weight = proc.weight if proc.weight else self.weight
-                
-                # Add weight and variable as columns to the dataframe
-                df = df.Define("total_weight", weight)
-                df = df.Define("plot_var", hist.variable)
-                
-                # Book histogram with defined columns
-                h = df.Histo1D(h_model, "plot_var", "total_weight")
-                actions.append(h)
-                
-                # Store in histogram object
-                hist.histograms.append((proc, h))
+                # Filter processes
+                processes_to_use = self._filter_processes(processes_to_use, hist.include_processes, hist.exclude_processes)
+                if not processes_to_use:
+                    self.logger.warning(f"No processes found after filtering histogram {hist.name} in region {region.name}. Skipping histogram as all processes would be 0. This region/histogram combination is pointless")
+                    continue
+
+                # Loop over selected processes
+                for proc in processes_to_use:
+
+                    # Create histogram model
+                    hist_name = f"{region.name}_{hist.name}_{proc.name}"
+                    h_model = ROOT.RDF.TH1DModel(hist_name, "", hist.bins, hist.x_min, hist.x_max)
+                    
+                    # Apply selection if any
+                    df = proc.df
+                    if region.selection:
+                        df = df.Filter(region.selection)
+                    
+                    # Use process-specific weight if specified, otherwise use plotter weight
+                    weight = proc.weight if proc.weight else self.weight
+                    
+                    # Add weight and variable as columns to the dataframe
+                    df = df.Define("total_weight", weight)
+                    df = df.Define("plot_var", hist.variable)
+                    
+                    # Book histogram with defined columns
+                    h = df.Histo1D(h_model, "plot_var", "total_weight")
+                    actions.append(h)
+                    
+                    # Store in histogram object
+                    hist.histograms.append((region.name, proc.name, h))
         
         # Process all actions in parallel
         self.logger.info("Launching booked RDataFrame actions. This may take a while...")
@@ -203,29 +229,50 @@ class Plotter:
         self.logger.info("RDataFrame actions processed. Hists created.")
 
 
+    def _filter_histograms(self, histograms: List[Histogram], include_histograms: Optional[List[str]] = None, exclude_histograms: Optional[List[str]] = None) -> List[Histogram]:
+        """Filter histograms based on include and exclude lists."""
+        if include_histograms:
+            filtered_histograms = [h for h in histograms if h.name in include_histograms]
+        elif exclude_histograms:
+            filtered_histograms = [h for h in histograms if h.name not in exclude_histograms]
+        else:
+            filtered_histograms = histograms
+
+        if len(filtered_histograms) == 0:
+            self.logger.warning(f"No histograms found after filtering. Check include_histograms and exclude_histograms in your configuration.")
+        return filtered_histograms
+
+
+    def _filter_processes(self, processes: List[Process], include_processes: Optional[List[str]] = None, exclude_processes: Optional[List[str]] = None) -> List[Process]:
+        """Filter processes based on include and exclude lists."""
+        if include_processes:
+            filtered_processes = [p for p in processes if p.name in include_processes]
+        elif exclude_processes:
+            filtered_processes = [p for p in processes if p.name not in exclude_processes]
+        else:
+            filtered_processes = processes
+
+        if len(filtered_processes) == 0:
+            self.logger.warning(f"No processes found after filtering. Check include_processes and exclude_processes in your configuration.")
+        return filtered_processes
+
+
     def _merge_hists(self, hist: Histogram) -> Dict[str, ROOT.TH1F]:
         """Merge histograms from processes with the same name."""
         merged = {}
         
         # Group histograms by process name
-        for proc, h in hist.histograms:
-            if proc.name not in merged:
+        for region, proc, h in hist.histograms:
+            if region not in merged:
+                merged[region] = {}
+            if proc not in merged[region]:
                 # Clone first histogram for this process
-                merged[proc.name] = h.Clone()
+                merged[region][proc] = h.Clone()
             else:
                 # Add subsequent histograms
-                merged[proc.name].Add(h.Clone())
+                merged[region][proc].Add(h.Clone())
 
-        # Check if merged histograms are consistent with self.unique_processes excluding processes included/excluded in hist.histograms
-        if hist.include_processes is not None:  
-            expected_process_names = [p.name for p in self.unique_processes if p.name in hist.include_processes]
-        elif hist.exclude_processes is not None:
-            expected_process_names = [p.name for p in self.unique_processes if p.name not in hist.exclude_processes]
-        else:
-            expected_process_names = [p.name for p in self.unique_processes]
-        merged_process_names = list(merged.keys())
-        if expected_process_names != merged_process_names:
-            self.logger.error(f"Expected processes do not match merged histograms: {expected_process_names} != {merged_process_names}")
+        #TODO: Check if merged hists are consistent with included/excluded histograms by regions/hists
 
         return merged
 
@@ -234,84 +281,85 @@ class Plotter:
         """Create and save all plots."""
         for hist in self.histograms:
 
-            # Create canvas
-            canvas_name = f"canvas_{hist.name}"
-            canvas = ROOT.TCanvas(canvas_name, canvas_name, 800, 900)
+            for region in hist.merged_histograms:   
+                # Create canvas
+                canvas_name = f"canvas_{hist.name}_{region}"
+                canvas = ROOT.TCanvas(canvas_name, canvas_name, 800, 900)
 
-            # Configure pads/canvas
-            if hist.ratio_config:
-                upper_pad, lower_pad = self._configure_pads(canvas, hist)
-                if not upper_pad or not lower_pad:
-                    continue
-                upper_pad.cd()
-            else:
-                canvas.SetRightMargin(0.12) #TODO: configure canvas function
-                if hist.log_y:
-                    canvas.SetLogy()
-                canvas.cd()
+                # Configure pads/canvas
+                if hist.ratio_config:
+                    upper_pad, lower_pad = self._configure_pads(canvas, hist)
+                    if not upper_pad or not lower_pad:
+                        continue
+                    upper_pad.cd()
+                else:
+                    canvas.SetRightMargin(0.12) #TODO: configure canvas function
+                    if hist.log_y:
+                        canvas.SetLogy()
+                    canvas.cd()
 
-            # Format histograms, create blueprint histogram
-            self._format_hists(hist.merged_histograms)
-            blueprint = list(hist.merged_histograms.values())[0].Clone()
-            blueprint.Reset()
-            blueprint.Draw()
+                # Format histograms, create blueprint histogram
+                self._format_hists(hist.merged_histograms[region])
+                blueprint = list(hist.merged_histograms[region].values())[0].Clone()
+                blueprint.Reset()
+                blueprint.Draw()
 
-            # Create legend with adjusted position and size
-            legend = ROOT.TLegend(0.70, 0.70, 0.90, 0.90)
-            legend.SetBorderSize(0)
-            legend.SetFillStyle(0)
+                # Create legend with adjusted position and size
+                legend = ROOT.TLegend(0.70, 0.70, 0.90, 0.90)
+                legend.SetBorderSize(0)
+                legend.SetFillStyle(0)
 
-            # Separate stacked and unstacked processes
-            stacked_hists, unstacked_hists = self._separate_hists(hist.merged_histograms)
+                # Separate stacked and unstacked processes
+                stacked_hists, unstacked_hists = self._separate_hists(hist.merged_histograms[region])
 
-            # Draw histograms
-            if len(stacked_hists) > 0:
-                cached_stack, cached_stack_total = self._draw_stack(hist, stacked_hists, legend)
-            if len(unstacked_hists) > 0:
-                cached_hists = self._draw_unstacked_hists(unstacked_hists, legend)
+                # Draw histograms
+                if len(stacked_hists) > 0:
+                    cached_stack, cached_stack_total = self._draw_stack(hist, stacked_hists, legend)
+                if len(unstacked_hists) > 0:
+                    cached_hists = self._draw_unstacked_hists(unstacked_hists, legend)
 
-            # Configure axes
-            max_height = max([h.GetMaximum() for h in cached_hists] + [cached_stack_total.GetMaximum()])
-            self._configure_axes(hist, blueprint, max_height)
+                # Configure axes
+                max_height = max([h.GetMaximum() for h in cached_hists] + [cached_stack_total.GetMaximum()])
+                self._configure_axes(hist, blueprint, max_height)
 
-            # Draw legend
-            legend.Draw()
-            
-            # Draw ATLAS label
-            self._draw_atlas_label(has_ratio=bool(hist.ratio_config))
-            
-            # Handle ratio plot if configured
-            if hist.ratio_config:
-                lower_pad.cd()
+                # Draw legend
+                legend.Draw()
                 
-                # Retrieve numerator histogram
-                if hist.ratio_config.numerator == "stack":
-                    h_num = cached_stack_total.Clone()
-                else:
-                    h_num = next(hist.merged_histograms[p.name] for p in self.unique_processes if p.name == hist.ratio_config.numerator)
-                    if not h_num:
-                        self.logger.error(f"Numerator process {hist.ratio_config.numerator} not found in merged histograms for hist {hist.name}")
-
-                # Retrieve denominator histogram
-                if hist.ratio_config.denominator == "stack":
-                    h_den = cached_stack_total.Clone()
-                else:
-                    h_den = next(hist.merged_histograms[p.name] for p in self.unique_processes if p.name == hist.ratio_config.denominator)
-                    if not h_den:
-                        self.logger.error(f"Denominator process {hist.ratio_config.denominator} not found in merged histograms for hist {hist.name}")
-       
-                # Draw ratio histogram and configure axes
-                if h_num and h_den:
-                    cached_ratio, cached_stack_ratio_errors = self._draw_ratio_points(hist, h_num, h_den)
-                    self._configure_ratio_axes(cached_ratio, hist)
-                else:
-                    self.logger.error(f"Ratio configuration for hist {hist.name} is invalid. Skipping ratio plot.")
+                # Draw ATLAS label
+                self._draw_atlas_label(has_ratio=bool(hist.ratio_config))
+                
+                # Handle ratio plot if configured
+                if hist.ratio_config:
+                    lower_pad.cd()
                     
-            # Save canvas
-            canvas.Update()
-            canvas.SaveAs(f"{self.output_dir}/{hist.name}.pdf")
-            canvas.Close()
-            self.logger.info(f"Plot saved: {hist.name}.pdf")
+                    # Retrieve numerator histogram
+                    if hist.ratio_config.numerator == "stack":
+                        h_num = cached_stack_total.Clone()
+                    else:
+                        h_num = next(hist.merged_histograms[region][p.name] for p in self.unique_processes if p.name == hist.ratio_config.numerator)
+                        if not h_num:
+                            self.logger.error(f"Numerator process {hist.ratio_config.numerator} not found in merged histograms for hist {hist.name}")
+
+                    # Retrieve denominator histogram
+                    if hist.ratio_config.denominator == "stack":
+                        h_den = cached_stack_total.Clone()
+                    else:
+                        h_den = next(hist.merged_histograms[region][p.name] for p in self.unique_processes if p.name == hist.ratio_config.denominator)
+                        if not h_den:
+                            self.logger.error(f"Denominator process {hist.ratio_config.denominator} not found in merged histograms for hist {hist.name}")
+        
+                    # Draw ratio histogram and configure axes
+                    if h_num and h_den:
+                        cached_ratio, cached_stack_ratio_errors = self._draw_ratio_points(hist, h_num, h_den)
+                        self._configure_ratio_axes(cached_ratio, hist)
+                    else:
+                        self.logger.error(f"Ratio configuration for hist {hist.name} is invalid. Skipping ratio plot.")
+                        
+                # Save canvas
+                canvas.Update()
+                canvas.SaveAs(f"{self.output_dir}/{region}_{hist.name}.pdf")
+                canvas.Close()
+                self.logger.info(f"Plot saved: {region}_{hist.name}.pdf")
 
 
     def _configure_pads(self, canvas: ROOT.TCanvas, hist: Histogram) -> Tuple[ROOT.TPad, ROOT.TPad]:
