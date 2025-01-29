@@ -313,13 +313,11 @@ class Plotter:
                 stacked_hists, unstacked_hists = self._separate_hists(hist.merged_histograms[region])
 
                 # Draw histograms
-                if len(stacked_hists) > 0:
-                    cached_stack, cached_stack_total = self._draw_stack(hist, stacked_hists, legend)
-                if len(unstacked_hists) > 0:
-                    cached_hists = self._draw_unstacked_hists(unstacked_hists, legend)
+                cached_stack, cached_stack_total = self._draw_stack(hist, stacked_hists, legend)
+                cached_hists = self._draw_unstacked_hists(unstacked_hists, legend)
 
                 # Configure axes
-                max_height = max([h.GetMaximum() for h in cached_hists] + [cached_stack_total.GetMaximum()])
+                max_height = max(cached_stack_total.GetMaximum() if cached_stack_total else 0, max([h.GetMaximum() for h in cached_hists]))
                 self._configure_axes(hist, blueprint, max_height)
 
                 # Draw legend
@@ -430,6 +428,7 @@ class Plotter:
 
     def _draw_stack(self, hist: Histogram, stacked_hists: List[ROOT.TH1F], legend: ROOT.TLegend) -> Tuple[ROOT.THStack, ROOT.TH1F]:
         """Draw stack. The stack and total histogram must be returned for ROOT to draw them."""
+        if not stacked_hists: return None, None
 
         # Create stack
         stack = ROOT.THStack("stack", "")
@@ -468,6 +467,8 @@ class Plotter:
 
     def _draw_unstacked_hists(self, unstacked_hists: List[Tuple[Process, ROOT.TH1F]], legend: ROOT.TLegend) -> List[ROOT.TH1F]:
         """Draw unstacked histograms."""
+        if not unstacked_hists: return []
+
         cached_hists = []
         for proc, h in unstacked_hists:
             h.SetLineColor(proc.color)
