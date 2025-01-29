@@ -348,7 +348,7 @@ class Plotter:
         
                     # Draw ratio histogram and configure axes
                     if h_num and h_den:
-                        cached_ratio, cached_stack_ratio_errors = self._draw_ratio_points(hist, h_num, h_den)
+                        cached_ratio, cached_stack_ratio_errors, line = self._draw_ratio_points(hist, h_num, h_den)
                         self._configure_ratio_axes(cached_ratio, hist)
                     else:
                         self.logger.error(f"Ratio configuration for hist {hist.name} is invalid. Skipping ratio plot.")
@@ -402,10 +402,12 @@ class Plotter:
                 continue
 
             # Set style
-            h.SetLineColor(proc.color)
             if proc.stack:
+                h.SetLineColor(ROOT.kBlack)
                 h.SetFillColor(proc.color)
             else:
+                h.SetLineColor(proc.color)
+                h.SetMarkerColor(proc.color)
                 h.SetFillStyle(0)
 
 
@@ -471,8 +473,6 @@ class Plotter:
 
         cached_hists = []
         for proc, h in unstacked_hists:
-            h.SetLineColor(proc.color)
-            h.SetMarkerColor(proc.color)
             if proc.error_style == ErrorBandStyle.NONE:
                 draw_options = "HIST"
                 legend_option = "l"
@@ -550,7 +550,7 @@ class Plotter:
         label.DrawLatex(x + spacing, y, text)
 
     
-    def _draw_ratio_points(self, hist, h_num, h_den) -> Tuple[ROOT.TH1F, ROOT.TH1F]:
+    def _draw_ratio_points(self, hist, h_num, h_den) -> Tuple[ROOT.TH1F, ROOT.TH1F, ROOT.TLine]:
         """Draw ratio points using numerator process' style."""
 
         # Create ratio histogram
@@ -612,7 +612,7 @@ class Plotter:
             line.SetLineStyle(2)
             line.Draw("SAME")
 
-        return h_ratio, h_stack_errors
+        return h_ratio, h_stack_errors, line
     
     
     def _configure_ratio_axes(self, h_ratio, hist) -> None:
