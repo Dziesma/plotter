@@ -317,7 +317,7 @@ class Plotter:
                 cached_hists = self._draw_unstacked_hists(unstacked_hists, legend)
 
                 # Configure axes
-                max_height = max(cached_stack_total.GetMaximum() if cached_stack_total else 0, max([h.GetMaximum() for h in cached_hists]))
+                max_height = max([h.GetMaximum() for h in cached_hists] + ([cached_stack_total.GetMaximum()] if cached_stack_total else []))
                 self._configure_axes(hist, blueprint, max_height)
 
                 # Draw legend
