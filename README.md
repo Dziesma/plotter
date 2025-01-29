@@ -11,5 +11,5 @@ source setup.sh
 
 ## Run
 ```bash
-python3 python/analysis/example.py
+python3 share/example.py
 ```
