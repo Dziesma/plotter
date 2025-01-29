@@ -1,8 +1,4 @@
-from analysis.process import Process
-from analysis.histogram import Histogram, RatioConfig
-from analysis.region import Region
-from analysis.plotter import Plotter
-from analysis.styles import ErrorBandStyle
+from plotter import Plotter, Region, Histogram, RatioConfig, Process, ErrorBandStyle
 import ROOT
 
 
