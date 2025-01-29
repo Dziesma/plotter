@@ -41,7 +41,6 @@ class Histogram:
                  x_label: str,
                  y_label: str = "Events",
                  y_min: Optional[float] = None,
-                 selection: str = "",
                  log_y: bool = False,
                  ratio_config: Optional[RatioConfig] = None,
                  include_processes: Optional[List[str]] = None,
@@ -59,7 +58,6 @@ class Histogram:
             x_label: X-axis label
             y_label: Y-axis label
             y_min: Minimum y-axis value (optional)
-            selection: Optional selection cut
             log_y: Use log scale for y-axis
             ratio_config: Ratio configuration
             include_processes: List of process names to include (if None, include all)
@@ -74,7 +72,6 @@ class Histogram:
         self.x_label = x_label
         self.y_label = y_label
         self.y_min = y_min
-        self.selection = selection
         self.log_y = log_y
         self.ratio_config = ratio_config
         self.include_processes = include_processes
