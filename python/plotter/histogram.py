@@ -1,4 +1,4 @@
-from typing import Optional, List, Union, Dict, Literal
+from typing import Optional, Literal, Union, List, Tuple, Dict
 import ROOT
 from .process import Process
 
@@ -34,9 +34,7 @@ class Histogram:
     def __init__(self,
                  name: str,
                  variable: str,
-                 bins: int,
-                 x_min: float,
-                 x_max: float,
+                 binning: Union[Tuple[int, float, float], Tuple[int, List[float]]],
                  x_label: str,
                  y_label: str = "Events",
                  y_min: Optional[float] = None,
@@ -51,9 +49,7 @@ class Histogram:
         Args:
             name: Histogram identifier
             variable: Branch name or arithmetic expression
-            bins: Number of bins
-            x_min: Minimum x-axis value
-            x_max: Maximum x-axis value
+            binning: Binning configuration (TH1 argument as a tuple)
             x_label: X-axis label
             y_label: Y-axis label
             y_min: Minimum y-axis value (optional)
@@ -65,9 +61,7 @@ class Histogram:
         """
         self.name = name
         self.variable = variable
-        self.bins = bins
-        self.x_min = x_min
-        self.x_max = x_max
+        self.binning = binning
         self.x_label = x_label
         self.y_label = y_label
         self.y_min = y_min

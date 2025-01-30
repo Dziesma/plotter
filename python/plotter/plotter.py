@@ -1,4 +1,4 @@
-from typing import Optional, List, Dict, Union, Tuple
+from typing import Optional, List, Dict, Tuple
 import ROOT
 import os
 import logging
@@ -204,7 +204,7 @@ class Plotter:
 
                     # Create histogram model
                     hist_name = f"{region.name}_{hist.name}_{proc.name}"
-                    h_model = ROOT.RDF.TH1DModel(hist_name, "", hist.bins, hist.x_min, hist.x_max)
+                    h_model = ROOT.RDF.TH1DModel(*((hist_name, "") + hist.binning))
                     
                     # Apply selection if any
                     df = proc.df
@@ -600,7 +600,7 @@ class Plotter:
             h_stack_errors.Draw("E2 SAME")
     
             # Draw horizontal line at 1
-            line = ROOT.TLine(hist.x_min, 1, hist.x_max, 1)
+            line = ROOT.TLine(h_stack_errors.GetXaxis().GetXmin(), 1, h_stack_errors.GetXaxis().GetXmax(), 1)
             line.SetLineStyle(2)
             line.Draw("SAME")
 
