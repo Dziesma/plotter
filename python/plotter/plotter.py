@@ -305,7 +305,7 @@ class Plotter:
                 blueprint.Draw()
 
                 # Create legend with adjusted position and size
-                legend = ROOT.TLegend(0.70, 0.70, 0.90, 0.90)
+                legend = ROOT.TLegend(0.60, 0.70, 0.90, 0.95)
                 legend.SetBorderSize(0)
                 legend.SetFillStyle(0)
 
