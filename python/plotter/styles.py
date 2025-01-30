@@ -1,4 +1,4 @@
-class ErrorBandStyle:
-    NONE = "none"
-    HATCHED = "hatched"
+class Style:
+    STACKED = "stacked"
+    LINE = "line"
     POINTS = "points" 

@@ -1,72 +1,82 @@
-from plotter import Plotter, Region, Histogram, RatioConfig, Process, ErrorBandStyle
+from plotter import Plotter, Region, Histogram, RatioConfig, Process, Style
 import ROOT
 
 
 # Create processes
 Wjets_mc23a_no_veto = Process(
     name="Wjets_Run3_no_veto",
+    label="Wjets w/o veto",
     file_path="/data/gkehris/BadMuonVetoAnalysis/merged/no_veto/Wjets_mc23a_Run3_merged.root",
     tree_name="LJAlgo/nominal",
     color=ROOT.kRed,
-    stack=True
+    style=Style.STACKED
 )
 
 Wjets_mc23d_no_veto = Process(
     name="Wjets_Run3_no_veto",
+    label="Wjets w/o veto",
     file_path="/data/gkehris/BadMuonVetoAnalysis/merged/no_veto/Wjets_mc23d_Run3_merged.root",
     tree_name="LJAlgo/nominal",
     color=ROOT.kRed,
-    stack=True
+    style=Style.STACKED
 )
 
 Zjets_mc23a_no_veto = Process(
     name="Zjets_Run3_no_veto",
+    label="Zjets w/o veto",
     file_path="/data/gkehris/BadMuonVetoAnalysis/merged/no_veto/Zjets_mc23a_Run3_merged.root",
     tree_name="LJAlgo/nominal",
     color=ROOT.kBlue,
-    stack=True,
-    error_style="points"
+    style=Style.STACKED
 )
 
 Zjets_mc23d_no_veto = Process(
     name="Zjets_Run3_no_veto",
+    label="Zjets w/o veto",
     file_path="/data/gkehris/BadMuonVetoAnalysis/merged/no_veto/Zjets_mc23d_Run3_merged.root",
     tree_name="LJAlgo/nominal",
     color=ROOT.kBlue,
-    stack=True,
-    error_style="points"
+    style=Style.STACKED
 )
 
 Wjets_mc23a_w_veto = Process(
     name="Run3_w_veto",
+    label="Run3 w/ veto",
     file_path="/data/gkehris/BadMuonVetoAnalysis/merged/w_veto/Wjets_mc23a_Run3_merged.root",
     tree_name="LJAlgo/nominal",
-    color=ROOT.kBlack,
-    stack=False
+    color=ROOT.kGreen,
+    style=Style.POINTS,
+    error_bars=True
 )
 
 Wjets_mc23d_w_veto = Process(
     name="Run3_w_veto",
+    label="Run3 w/ veto",
     file_path="/data/gkehris/BadMuonVetoAnalysis/merged/w_veto/Wjets_mc23d_Run3_merged.root",
     tree_name="LJAlgo/nominal",
-    color=ROOT.kBlack,
-    stack=False
+    color=ROOT.kGreen,
+    style=Style.POINTS,
+    error_bars=True
 )
 
 Zjets_mc23a_w_veto = Process(
     name="Run3_w_veto",
+    label="Run3 w/ veto",
     file_path="/data/gkehris/BadMuonVetoAnalysis/merged/w_veto/Zjets_mc23a_Run3_merged.root",
     tree_name="LJAlgo/nominal",
-    color=ROOT.kBlack,
-    stack=False
+    color=ROOT.kGreen,
+    style=Style.POINTS,
+    error_bars=True
 )
 
 Zjets_mc23d_w_veto = Process(
     name="Run3_w_veto",
+    label="Run3 w/ veto",
     file_path="/data/gkehris/BadMuonVetoAnalysis/merged/w_veto/Zjets_mc23d_Run3_merged.root",
     tree_name="LJAlgo/nominal",
-    color=ROOT.kBlack,
-    stack=False
+    color=ROOT.kGreen,
+    style=Style.POINTS,
+    error_bars=True
 )
 
 
@@ -91,7 +101,7 @@ pt_hist = Histogram(
     x_label="Lepton p_{T} [GeV]",
     y_min=1.0,
     log_y=True,
-    stack_error_style=ErrorBandStyle.HATCHED,
+    error_bars = True,
     ratio_config=ratio_config
 )
 
@@ -104,7 +114,7 @@ mass_hist = Histogram(
     x_label="m_{lj} [GeV]",
     y_min=1.0,
     log_y=True,
-    stack_error_style=ErrorBandStyle.HATCHED,
+    error_bars = True,
     ratio_config=ratio_config
 )
 

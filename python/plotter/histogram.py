@@ -1,6 +1,5 @@
 from typing import Optional, List, Union, Dict, Literal
 import ROOT
-from .styles import ErrorBandStyle
 from .process import Process
 
 class RatioConfig:
@@ -45,7 +44,7 @@ class Histogram:
                  ratio_config: Optional[RatioConfig] = None,
                  include_processes: Optional[List[str]] = None,
                  exclude_processes: Optional[List[str]] = None,
-                 stack_error_style: str = ErrorBandStyle.HATCHED):
+                 error_bars: bool = True):
         """
         Initialize a histogram configuration.
         
@@ -62,7 +61,7 @@ class Histogram:
             ratio_config: Ratio configuration
             include_processes: List of process names to include (if None, include all)
             exclude_processes: List of process names to exclude (if None, exclude none)
-            stack_error_style: Stack error style
+            error_bars: Draw error bars
         """
         self.name = name
         self.variable = variable
@@ -76,7 +75,7 @@ class Histogram:
         self.ratio_config = ratio_config
         self.include_processes = include_processes
         self.exclude_processes = exclude_processes
-        self.stack_error_style = stack_error_style
+        self.error_bars = error_bars
         
         # Will store actual histograms
         self.histograms: List[Tuple[Process, ROOT.TH1F]] = []

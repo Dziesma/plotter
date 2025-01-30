@@ -5,7 +5,7 @@ import logging
 from .region import Region
 from .histogram import Histogram
 from .process import Process, ProcessTemplate
-from .styles import ErrorBandStyle
+from .styles import Style
 from .logger import package_logger
 
 
@@ -67,15 +67,17 @@ class Plotter:
         process_template = next((p for p in self.unique_processes if p.name == process.name), None)
         if not process_template:
             # Append process template if not already present
-            self.unique_processes.append(ProcessTemplate(process.name, process.color, process.stack, process.error_style))
+            self.unique_processes.append(ProcessTemplate(process.name, process.color, process.style, process.error_bars, process.label))
         else:
             # Throw warning if process template already exists with different color or stack setting
             if process.color != process_template.color:
                 self.logger.warning(f"Process {process.name} already exists with different color. Skipping color update from {process.file_path}:{process.tree_name}.")
-            if process.stack != process_template.stack:
-                self.logger.warning(f"Process {process.name} already exists with different stack setting. Skipping stack setting update from {process.file_path}:{process.tree_name}.")
-            if process.error_style != process_template.error_style:
-                self.logger.warning(f"Process {process.name} already exists with different error style. Skipping error style update from {process.file_path}:{process.tree_name}.")
+            if process.style != process_template.style:
+                self.logger.warning(f"Process {process.name} already exists with different style. Skipping style update from {process.file_path}:{process.tree_name}.")
+            if process.error_bars != process_template.error_bars:
+                self.logger.warning(f"Process {process.name} already exists with different error bars setting. Skipping error bars update from {process.file_path}:{process.tree_name}.")
+            if process.label != process_template.label:
+                self.logger.warning(f"Process {process.name} already exists with different label. Skipping label update from {process.file_path}:{process.tree_name}.")
 
         # Add the process to the plotter
         self.processes.append(process)
@@ -305,7 +307,7 @@ class Plotter:
                 blueprint.Draw()
 
                 # Create legend with adjusted position and size
-                legend = ROOT.TLegend(0.60, 0.70, 0.90, 0.95)
+                legend = ROOT.TLegend(0.60, 0.70, 0.90, 0.92)
                 legend.SetBorderSize(0)
                 legend.SetFillStyle(0)
 
@@ -319,6 +321,7 @@ class Plotter:
                 # Configure axes
                 max_height = max([h.GetMaximum() for h in cached_hists] + ([cached_stack_total.GetMaximum()] if cached_stack_total else []))
                 self._configure_axes(hist, blueprint, max_height)
+                ROOT.gPad.RedrawAxis()
 
                 # Draw legend
                 legend.Draw()
@@ -352,6 +355,7 @@ class Plotter:
                         self._configure_ratio_axes(cached_ratio, hist)
                     else:
                         self.logger.error(f"Ratio configuration for hist {hist.name} is invalid. Skipping ratio plot.")
+                    ROOT.gPad.RedrawAxis()
                         
                 # Save canvas
                 canvas.Update()
@@ -402,13 +406,22 @@ class Plotter:
                 continue
 
             # Set style
-            if proc.stack:
+            if proc.style == Style.STACKED:
                 h.SetLineColor(ROOT.kBlack)
                 h.SetFillColor(proc.color)
-            else:
+            elif proc.style == Style.LINE:
+                h.SetMarkerSize(0)
                 h.SetLineColor(proc.color)
+            elif proc.style == Style.POINTS:
                 h.SetMarkerColor(proc.color)
-                h.SetFillStyle(0)
+                if proc.error_bars:
+                    h.SetLineColor(proc.color)
+                else:
+                    h.SetLineWidth(0)
+            else:
+                self.logger.error(f"Invalid style: {proc.style}. Drawing with style: {Style.LINE}.")
+                h.SetMarkerSize(0)
+                h.SetLineColor(proc.color)
 
 
     def _separate_hists(self, merged_hists: Dict[str, ROOT.TH1F]) -> Tuple[List[ROOT.TH1F], List[ROOT.TH1F]]:
@@ -418,51 +431,41 @@ class Plotter:
         for proc in self.unique_processes:
             if proc.name in merged_hists:
                 h = merged_hists[proc.name].Clone()
-                if proc.stack:
-                    stacked_hists.append(h)
+                if proc.style == Style.STACKED:
+                    stacked_hists.append((proc, h))
                 else:
                     unstacked_hists.append((proc, h))
 
-        stacked_hists.sort(key=lambda h: h.Integral())
+        stacked_hists.sort(key=lambda s: s[1].Integral())
         unstacked_hists.sort(key=lambda u: u[1].Integral())
         return stacked_hists, unstacked_hists
 
 
-    def _draw_stack(self, hist: Histogram, stacked_hists: List[ROOT.TH1F], legend: ROOT.TLegend) -> Tuple[ROOT.THStack, ROOT.TH1F]:
+    def _draw_stack(self, hist: Histogram, stacked_hists: List[Tuple[Process, ROOT.TH1F]], legend: ROOT.TLegend) -> Tuple[ROOT.THStack, ROOT.TH1F]:
         """Draw stack. The stack and total histogram must be returned for ROOT to draw them."""
         if not stacked_hists: return None, None
 
         # Create stack
         stack = ROOT.THStack("stack", "")
         first_hist = True
-        for h in stacked_hists:
+        for proc, h in stacked_hists:
             if first_hist:
                 total_hist = h.Clone()
                 first_hist = False
             else:
                 total_hist.Add(h)
             stack.Add(h)
-            legend.AddEntry(h, h.GetName(), "f")
+            legend.AddEntry(h, proc.label, "f")
         stack.Draw("HIST SAME")
 
         # Draw stack error bands
-        if hist.stack_error_style == ErrorBandStyle.NONE:
-            return stack, total_hist
-        elif hist.stack_error_style == ErrorBandStyle.HATCHED:
+        if hist.error_bars:
             total_hist.SetLineWidth(0)
             total_hist.SetMarkerSize(0)
             total_hist.SetFillStyle(3004)
             total_hist.SetFillColor(ROOT.kBlack)
-            draw_option = "E2 SAME"
-            legend_option = "f"
-        elif hist.stack_error_style == ErrorBandStyle.POINTS:
-            self.logger.error(f"Invalid stack errror style: POINTS for hist {hist.name}. Won't draw stack error bands.")
-            return stack, total_hist
-        else:
-            self.logger.error(f"Invalid stack error style: {hist.stack_error_style} for hist {hist.name}. Won't draw stack error bands.")
-            return stack, total_hist
-        total_hist.Draw(draw_option)
-        legend.AddEntry(total_hist, "Stat. Unc.", legend_option)
+            total_hist.Draw("E2 SAME")
+            legend.AddEntry(total_hist, "Stat. Unc.", "f")
         
         return stack, total_hist
 
@@ -473,24 +476,24 @@ class Plotter:
 
         cached_hists = []
         for proc, h in unstacked_hists:
-            if proc.error_style == ErrorBandStyle.NONE:
+            if proc.style == Style.LINE:
                 draw_options = "HIST"
                 legend_option = "l"
-            elif proc.error_style == ErrorBandStyle.HATCHED:
-                draw_options = "HIST"   
-                legend_option = "l"
-                self.logger.error(f"Error band style {proc.error_style} not implemented for unstacked histograms. Drawing with error band style NONE.")
-            elif proc.error_style == ErrorBandStyle.POINTS:
-                draw_options = "E X0"
+            elif proc.style == Style.POINTS:
+                draw_options = "P"
                 legend_option = "p"
+            elif proc.style == Style.STACKED:
+                self.logger.error(f"Stacked style found for an unstacked histogram. This should not happen.")   
             else:
+                self.logger.error(f"Invalid style: {proc.style}. Drawing with style: {Style.LINE}.")
                 draw_options = "HIST"
                 legend_option = "l"
-                self.logger.error(f"Invalid error style: {proc.error_style}. Drawing with error band style NONE.")
+            draw_options += " E X0" if proc.error_bars else ""
             h.Draw(draw_options + " SAME")
             if legend_option:
-                legend.AddEntry(h, proc.name, legend_option)
+                legend.AddEntry(h, proc.label, legend_option)
             cached_hists.append(h)
+
         return cached_hists
 
 
@@ -559,54 +562,43 @@ class Plotter:
 
         # Draw ratio histogram
         if hist.ratio_config.numerator == "stack":
-            if hist.stack_error_style == ErrorBandStyle.NONE:
-                h_ratio.SetLineColor(ROOT.kGray)
-                h_ratio.SetMarkerSize(0)
-                h_ratio.Draw()
-            elif hist.stack_error_style == ErrorBandStyle.HATCHED:
-                h_ratio.SetLineWidth(0)
-                h_ratio.SetMarkerColor(ROOT.kGray)
-                h_ratio.Draw("E X0")
-            elif hist.stack_error_style == ErrorBandStyle.POINTS:
-                self.logger.error(f"Invalid stack error style: POINTS for ratio panel of hist {hist.name}. Won't draw stack error bands.")
-                h_ratio.SetLineColor(ROOT.kGray)
-                h_ratio.SetMarkerSize(0)
-                h_ratio.Draw()
+            h_ratio.SetMarkerColor(ROOT.kGray)
+            if not hist.error_bars:
+                h_ratio.Draw("P")
             else:
-                self.logger.error(f"Invalid stack error style: {hist.stack_error_style} for ratio panel of hist {hist.name}. Won't draw stack error bands.")
-                h_ratio.SetLineColor(ROOT.kGray)
-                h_ratio.SetMarkerSize(0)
-                h_ratio.Draw()
+                h_ratio.Draw("E X0 P")
         else:
             proc = next(p for p in self.unique_processes if p.name == hist.ratio_config.numerator)
-            if proc.error_style == ErrorBandStyle.NONE:
-                h_ratio.SetMarkerSize(0)
-                h_ratio.Draw()
-            elif proc.error_style == ErrorBandStyle.HATCHED:
-                self.logger.error(f"Hatched error style not yet implemented for process-specific ratio plots. Won't draw error bands.")
-                h_ratio.SetMarkerSize(0)
-                h_ratio.Draw()
-            elif proc.error_style == ErrorBandStyle.POINTS:
-                h_ratio.Draw("E X0")
+            error_option = " E X0" if proc.error_bars else ""
+            if proc.style == Style.LINE:
+                h_ratio.Draw("HIST" + error_option)
+            elif proc.style == Style.POINTS:
+                h_ratio.Draw("P" + error_option)
+            elif proc.style == Style.STACKED:
+                self.logger.warning(f"Stacked style found for a ratio plot, will draw in style {Style.LINE}.")
+                h_ratio.Draw("HIST" + error_option)
             else:
-                self.logger.error(f"Invalid error style: {proc.error_style} for ratio panel of hist {hist.name}. Won't draw error bands.")
-                h_ratio.SetMarkerSize(0)
-                h_ratio.Draw()
+                self.logger.error(f"Invalid style: {proc.style}. Drawing with style: {Style.LINE}.")
+                h_ratio.Draw("HIST" + error_option)
 
-        # Draw stack errors centered at 1.0 if denominator is stack
-        h_stack_errors = None
-        if hist.ratio_config.denominator == "stack":
+        # Draw relative stack errors centered at 1.0 if denominator is stack
+        h_stack_errors, line = None, None
+        if hist.error_bars and hist.ratio_config.denominator == "stack":
+
+            # Create stack error histogram
             h_stack_errors = h_den.Clone()
             for i in range(1, h_stack_errors.GetNbinsX() + 1):
                 if h_stack_errors.GetBinContent(i) > 0:
                     h_stack_errors.SetBinContent(i, 1.0)
                     h_stack_errors.SetBinError(i, h_den.GetBinError(i) / h_den.GetBinContent(i))
+
+            # Draw hashed stack error histogram
             h_stack_errors.SetFillColor(ROOT.kBlack)
             h_stack_errors.SetFillStyle(3004)
             h_stack_errors.SetMarkerStyle(0)
             h_stack_errors.SetMarkerSize(0)
             h_stack_errors.Draw("E2 SAME")
-        
+    
             # Draw horizontal line at 1
             line = ROOT.TLine(hist.x_min, 1, hist.x_max, 1)
             line.SetLineStyle(2)

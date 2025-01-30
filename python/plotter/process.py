@@ -2,15 +2,16 @@ from typing import Optional, List, Union
 import ROOT
 import os
 from .logger import package_logger
-from .styles import ErrorBandStyle
+from .styles import Style
 
 
 class ProcessTemplate:
-    def __init__(self, name: str, color: int, stack: bool, error_style: str):
+    def __init__(self, name: str, color: int, style: str, error_bars: bool, label: str):
         self.name = name
         self.color = color
-        self.stack = stack
-        self.error_style = error_style
+        self.style = style
+        self.error_bars = error_bars
+        self.label = label if label is not None else name
 
 class Process(ProcessTemplate):
     def __init__(self, 
@@ -19,8 +20,9 @@ class Process(ProcessTemplate):
                  tree_name: str,
                  color: Optional[int] = 1,
                  weight: Optional[str] = None,
-                 stack: Optional[bool] = True,
-                 error_style: Optional[str] = ErrorBandStyle.POINTS):
+                 style: Optional[str] = Style.STACKED,
+                 error_bars: Optional[bool] = True,
+                 label: Optional[str] = None):
         """
         Initialize a physics process.
         
@@ -30,10 +32,11 @@ class Process(ProcessTemplate):
             tree_name: Path of the TTree in the ROOT file
             color: ROOT color code for plotting
             weight: Weight expression (overrides plotter weight if specified)
-            stack: Whether to include in stack (False for data/signal)
-            error_style: Style of error band
+            style: Style of process (stacked, line, points)
+            error_bars: Whether to draw error bars
+            label: Label for the process (defaults to name if not set)
         """
-        super().__init__(name, color, stack, error_style)
+        super().__init__(name, color, style, error_bars, label)
         self.logger = package_logger.get_logger(f"process.{name}")
         
         # Validate file path and tree name
