@@ -10,7 +10,7 @@ from .logger import package_logger
 
 
 class Plotter:
-    def __init__(self, output_dir: str = "plots", weight: str = "1", log_level: int = logging.INFO):
+    def __init__(self, output_dir: str = "plots", weight: str = "1", log_level: int = logging.INFO, n_threads: int = 32):
         """Initialize the plotter with ATLAS style settings."""
 
         # Set up logger
@@ -21,6 +21,9 @@ class Plotter:
         # Suppress ROOT info messages
         ROOT.gROOT.SetBatch(True)  # Run in batch mode
         ROOT.gErrorIgnoreLevel = ROOT.kWarning  # Only show warnings and above
+
+        # Set up ROOT threads
+        ROOT.ROOT.EnableImplicitMT(n_threads)
 
         # Set up processes and histograms
         self.regions: List[Region] = []
