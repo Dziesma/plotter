@@ -1,6 +1,8 @@
 from typing import Optional, Literal, Union, List, Tuple, Dict
+from array import array
 import ROOT
 from .process import Process
+
 
 class RatioConfig:
     def __init__(self, 
@@ -29,6 +31,7 @@ class RatioConfig:
         self.y_min = y_min
         self.y_max = y_max
         self.error_option = error_option
+
 
 class Histogram:
     def __init__(self,
@@ -61,7 +64,7 @@ class Histogram:
         """
         self.name = name
         self.variable = variable
-        self.binning = binning
+        self.binning = self._format_binning(binning)
         self.x_label = x_label
         self.y_label = y_label
         self.y_min = y_min
@@ -74,3 +77,9 @@ class Histogram:
         # Will store actual histograms
         self.histograms: List[Tuple[Process, ROOT.TH1F]] = []
         self.merged_histograms: Dict[str, ROOT.TH1F] = {}
+
+    def _format_binning(self, binning: Union[Tuple[int, float, float], Tuple[int, List[float]]]) -> Union[Tuple[int, float, float], Tuple[int, "array[float]"]]:
+        binning = list(binning)
+        for i in range(len(binning)):
+            if type(binning[i]) in [tuple, list]: binning[i] = array('f', binning[i])
+        return tuple(binning)

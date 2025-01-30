@@ -114,7 +114,7 @@ class Plotter:
             for region in hist.merged_histograms:   
                 for proc in self.unique_processes:
                     if proc.name in hist.merged_histograms[region]:
-                        hist.merged_histograms[region][proc.name].Write(f"{region}_{hist.name}_{proc.name}")
+                        hist.merged_histograms[region][proc.name].Write(f"{hist.name}_{region}_{proc.name}")
         output_file.Close()
         self.logger.info("Merged histograms saved to merged_histograms.root")
 
@@ -363,9 +363,9 @@ class Plotter:
                         
                 # Save canvas
                 canvas.Update()
-                canvas.SaveAs(f"{self.output_dir}/{region}_{hist.name}.pdf")
+                canvas.SaveAs(f"{self.output_dir}/{hist.name}_{region}.pdf")
                 canvas.Close()
-                self.logger.info(f"Plot saved: {region}_{hist.name}.pdf")
+                self.logger.info(f"Plot saved: {hist.name}_{region}.pdf")
 
 
     def _configure_pads(self, canvas: ROOT.TCanvas, hist: Histogram) -> Tuple[ROOT.TPad, ROOT.TPad]:
