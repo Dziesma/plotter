@@ -2,7 +2,7 @@ from .plotter import Plotter
 from .region import Region
 from .process import Process
 from .histogram import Histogram, RatioConfig
-from .styles import ErrorBandStyle
+from .styles import Style
 
 __all__ = [
     "Plotter",
@@ -10,5 +10,5 @@ __all__ = [
     "Process",
     "Histogram",
     "RatioConfig",
-    "ErrorBandStyle"
+    "Style"
 ]
