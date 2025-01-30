@@ -10,7 +10,7 @@ from .logger import package_logger
 
 
 class Plotter:
-    def __init__(self, output_dir: str = "plots", weight: str = "1", log_level: int = logging.INFO, n_threads: int = 32):
+    def __init__(self, output_dir: Optional[str] = "plots", weight: Optional[str] = "1", log_level: Optional[int] = logging.INFO, n_threads: Optional[int] = 32):
         """Initialize the plotter with ATLAS style settings."""
 
         # Set up logger
