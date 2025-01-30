@@ -128,7 +128,7 @@ w_veto_region = Region(
 
 
 # Create plotter and add processes and histograms
-plotter = Plotter(weight="mcEventWeight*weight_gen*weight_lumi*weight_norm*weight_singleleptonTrigSF*weight_lepton*weight_pileup*weight_btag*weight_jvt*beamSpotWeight", output_dir="test")
+plotter = Plotter(weight="mcEventWeight*weight_gen*weight_lumi*weight_norm*weight_singleleptonTrigSF*weight_lepton*weight_pileup*weight_btag*weight_jvt*beamSpotWeight", output_dir="test", n_threads=8)
 
 plotter.add_process(Wjets_mc23a_no_veto)
 plotter.add_process(Wjets_mc23d_no_veto)
