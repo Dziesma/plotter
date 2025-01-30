@@ -49,5 +49,5 @@ class Process(ProcessTemplate):
         self.weight = weight
         
         # Create RDataFrame
-        self.df = ROOT.RDataFrame(tree_name, self.file_path)
+        self.df = None
         self.logger.info(f"Initialized process: {self.name} with file:tree: {self.file_path}:{self.tree_name}")

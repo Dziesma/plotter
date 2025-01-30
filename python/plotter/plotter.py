@@ -83,6 +83,7 @@ class Plotter:
                 self.logger.warning(f"Process {process.name} already exists with different label. Skipping label update from {process.file_path}:{process.tree_name}.")
 
         # Add the process to the plotter
+        process.df = ROOT.RDataFrame(process.tree_name, process.file_path)
         self.processes.append(process)
         self.logger.info(f"Added process {process.name} from {process.file_path}:{process.tree_name} to plotter")
 
