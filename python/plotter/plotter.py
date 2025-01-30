@@ -459,6 +459,7 @@ class Plotter:
             else:
                 total_hist.Add(h)
             stack.Add(h)
+        for proc, h in stacked_hists[::-1]:
             legend.AddEntry(h, proc.label, "f")
         stack.Draw("HIST SAME")
 
