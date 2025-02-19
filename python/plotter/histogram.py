@@ -37,10 +37,11 @@ class Histogram:
     def __init__(self,
                  name: str,
                  variable: str,
-                 binning: Union[Tuple[int, float, float], Tuple[int, List[float]]],
+                 binning: Union[Tuple[int, float, float], Tuple[int, Tuple[float, ...]]],
                  x_label: str,
                  y_label: str = "Events",
                  y_min: Optional[float] = None,
+                 log_x: bool = False,
                  log_y: bool = False,
                  ratio_config: Optional[RatioConfig] = None,
                  include_processes: Optional[List[str]] = None,
@@ -56,6 +57,7 @@ class Histogram:
             x_label: X-axis label
             y_label: Y-axis label
             y_min: Minimum y-axis value (optional)
+            log_x: Use log scale for x-axis
             log_y: Use log scale for y-axis
             ratio_config: Ratio configuration
             include_processes: List of process names to include (if None, include all)
@@ -64,10 +66,11 @@ class Histogram:
         """
         self.name = name
         self.variable = variable
-        self.binning = self._format_binning(binning)
+        self.binning = _format_binning(binning)
         self.x_label = x_label
         self.y_label = y_label
         self.y_min = y_min
+        self.log_x = log_x
         self.log_y = log_y
         self.ratio_config = ratio_config
         self.include_processes = include_processes
@@ -78,8 +81,57 @@ class Histogram:
         self.histograms: List[Tuple[Process, ROOT.TH1F]] = []
         self.merged_histograms: Dict[str, ROOT.TH1F] = {}
 
-    def _format_binning(self, binning: Union[Tuple[int, float, float], Tuple[int, List[float]]]) -> Union[Tuple[int, float, float], Tuple[int, "array[float]"]]:
-        binning = list(binning)
-        for i in range(len(binning)):
-            if type(binning[i]) in [tuple, list]: binning[i] = array('f', binning[i])
-        return tuple(binning)
+
+class Histogram2D:
+    def __init__(self,
+                 name: str,
+                 variable_x: str,
+                 variable_y: str,
+                 binning_x: Union[Tuple[int, float, float], Tuple[int, Tuple[float, ...]]],
+                 binning_y: Union[Tuple[int, float, float], Tuple[int, Tuple[float, ...]]],
+                 x_label: str,
+                 y_label: str,
+                 log_x: bool = False,
+                 log_y: bool = False,
+                 ratio_config: Optional[RatioConfig] = None,
+                 include_processes: Optional[List[str]] = None,
+                 exclude_processes: Optional[List[str]] = None):
+        """
+        Initialize a 2D histogram configuration.
+        
+        Args:
+            name: Histogram identifier
+            variable_x: X-axis variable
+            variable_y: Y-axis variable
+            binning_x: X-axis binning
+            binning_y: Y-axis binning
+            x_label: X-axis label
+            y_label: Y-axis label
+            log_x: Use log scale for x-axis
+            log_y: Use log scale for y-axis
+            ratio_config: Ratio configuration
+            include_processes: List of process names to include (if None, include all)
+            exclude_processes: List of process names to exclude (if None, exclude none)
+        """
+        self.name = name
+        self.variable_x = variable_x
+        self.variable_y = variable_y
+        self.binning_x = _format_binning(binning_x)
+        self.binning_y = _format_binning(binning_y)
+        self.x_label = x_label
+        self.y_label = y_label
+        self.log_x = log_x
+        self.log_y = log_y
+        self.ratio_config = ratio_config
+        self.include_processes = include_processes
+        self.exclude_processes = exclude_processes
+
+        # Will store actual histograms
+        self.histograms: List[Tuple[Process, ROOT.TH2F]] = []
+        self.merged_histograms: Dict[str, ROOT.TH2F] = {}
+
+def _format_binning(binning: Union[Tuple[int, float, float], Tuple[int, Tuple[float, ...]]]) -> Union[Tuple[int, float, float], Tuple[int, "array[float]"]]:
+    binning = list(binning)
+    for i in range(len(binning)):
+        if type(binning[i]) in [tuple, list]: binning[i] = array('f', binning[i])
+    return tuple(binning)
