@@ -122,6 +122,7 @@ mass_res_hist = Histogram2D(
     binning_y=(33, 700., 4000.),
     x_label="Truth m_{lj} [GeV]",
     y_label="Reco m_{lj} [GeV]",
+    log_z=True
 )
 
 

@@ -405,26 +405,32 @@ class Plotter:
                 for proc in hist.merged_histograms[region]:
                     # Create canvas
                     canvas_name = f"canvas_{hist.name}_{region}"
-                    canvas = ROOT.TCanvas(canvas_name, canvas_name, 800, 900)
-                    canvas.SetRightMargin(0.12) #TODO: configure canvas function
+                    canvas = ROOT.TCanvas(canvas_name, canvas_name, 1000, 800)
+                    canvas.SetRightMargin(0.20) #TODO: configure canvas function
                     if hist.log_x:
                         canvas.SetLogx()
                     if hist.log_y:
                         canvas.SetLogy()
+                    if hist.log_z:
+                        canvas.SetLogz()
                     canvas.cd()
 
                     # Format histogram
                     h = hist.merged_histograms[region][proc]
-                    h.Draw()
-                    h.GetXaxis().SetTitle(hist.x_label)
-                    h.GetYaxis().SetTitle(hist.y_label)
+                    h.Draw("COLZ")
 
                     # Configure axes
                     self._configure_axes(hist, h)
 
+                    # Move x-axis exponent that overlaps with z-axis
+                    ROOT.TGaxis.SetExponentOffset(0., -0.07, "x")
+
                     # Save canvas
                     canvas.SaveAs(os.path.join(self.output_dir, f"{h.GetName()}.pdf"))
                     canvas.Close()
+
+                    # Return x-axis exponent offset to default
+                    ROOT.TGaxis.SetExponentOffset()
                 
 
 
@@ -568,6 +574,8 @@ class Plotter:
         # Set axis labels
         blueprint.GetXaxis().SetTitle(hist.x_label)
         blueprint.GetYaxis().SetTitle(hist.y_label)
+        if type(hist) == Histogram2D:
+            blueprint.GetZaxis().SetTitle(hist.z_label)
         
         # Y-axis settings
         blueprint.GetYaxis().SetLabelSize(0.045)
@@ -582,11 +590,21 @@ class Plotter:
             blueprint.GetXaxis().SetLabelSize(0.045)
             blueprint.GetXaxis().SetTitleSize(0.05)
         
+        # Z-axis settings
+        if type(hist) == Histogram2D:
+            blueprint.GetZaxis().SetLabelSize(0.045)
+            blueprint.GetZaxis().SetTitleSize(0.05)
+            blueprint.GetZaxis().SetTitleOffset(1.5)
+
         # Prevent label overlap
         blueprint.GetXaxis().SetMaxDigits(3)
         blueprint.GetYaxis().SetMaxDigits(3)
+        if type(hist) == Histogram2D:
+            blueprint.GetZaxis().SetMaxDigits(3)
         blueprint.GetXaxis().SetNdivisions(505)
         blueprint.GetYaxis().SetNdivisions(505)
+        if type(hist) == Histogram2D:
+            blueprint.GetZaxis().SetNdivisions(505)
         
         # Set maximum and minimum to avoid legend overlap
         if max_height:
