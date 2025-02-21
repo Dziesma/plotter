@@ -44,6 +44,8 @@ class Histogram:
                  log_x: bool = False,
                  log_y: bool = False,
                  ratio_config: Optional[RatioConfig] = None,
+                 underflow: bool = False,
+                 overflow: bool = False,
                  include_processes: Optional[List[str]] = None,
                  exclude_processes: Optional[List[str]] = None,
                  error_bars: bool = True):
@@ -60,6 +62,8 @@ class Histogram:
             log_x: Use log scale for x-axis
             log_y: Use log scale for y-axis
             ratio_config: Ratio configuration
+            underflow: Draw underflow bin
+            overflow: Draw overflow bin
             include_processes: List of process names to include (if None, include all)
             exclude_processes: List of process names to exclude (if None, exclude none)
             error_bars: Draw error bars
@@ -73,6 +77,8 @@ class Histogram:
         self.log_x = log_x
         self.log_y = log_y
         self.ratio_config = ratio_config
+        self.underflow = underflow
+        self.overflow = overflow
         self.include_processes = include_processes
         self.exclude_processes = exclude_processes
         self.error_bars = error_bars
@@ -139,5 +145,5 @@ class Histogram2D:
 def _format_binning(binning: Union[Tuple[int, float, float], Tuple[int, Tuple[float, ...]]]) -> Union[Tuple[int, float, float], Tuple[int, "array[float]"]]:
     binning = list(binning)
     for i in range(len(binning)):
-        if type(binning[i]) in [tuple, list]: binning[i] = array('f', binning[i])
+        if type(binning[i]) in [tuple, list]: binning[i] = array('d', binning[i])
     return tuple(binning)

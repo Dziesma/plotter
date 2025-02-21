@@ -125,6 +125,10 @@ class Plotter:
             hist.merged_histograms = self._merge_hists(hist)
         self.logger.info("Histograms merged")
 
+        # Add underflow and overflow to histograms
+        for hist in self.histograms:
+            self._add_underflow_overflow(hist)
+
         output_file = ROOT.TFile(os.path.join(self.output_dir, "merged_histograms.root"), "RECREATE")
         for hist in self.histograms + self.histograms2D:
             for region in hist.merged_histograms:   
@@ -291,7 +295,7 @@ class Plotter:
         return filtered_processes
 
 
-    def _merge_hists(self, hist: Union[Histogram, Histogram2D]) -> Dict[str, Union[ROOT.TH1F, ROOT.TH2F]]:
+    def _merge_hists(self, hist: Union[Histogram, Histogram2D]) -> Dict[str, Union[ROOT.TH1D, ROOT.TH2D]]:
         """Merge histograms from processes with the same name."""
         merged = {}
         
@@ -309,6 +313,27 @@ class Plotter:
         #TODO: Check if merged hists are consistent with included/excluded histograms by regions/hists
 
         return merged
+
+
+    def _add_underflow_overflow(self, hist: Histogram) -> None:
+        """Add underflow and overflow to histograms."""
+        if not hist.underflow and not hist.overflow:
+            return
+        for region in hist.merged_histograms:
+            for proc in hist.merged_histograms[region]:
+                temp_hist = hist.merged_histograms[region][proc].Clone("temp")
+                temp_hist.Reset()
+                if hist.underflow:
+                    temp_hist.SetBinContent(1, hist.merged_histograms[region][proc].GetBinContent(0))
+                    temp_hist.SetBinError(1, hist.merged_histograms[region][proc].GetBinError(0))
+                    hist.merged_histograms[region][proc].SetBinContent(0, 0)
+                    hist.merged_histograms[region][proc].SetBinError(0, 0)
+                if hist.overflow:
+                    temp_hist.SetBinContent(temp_hist.GetNbinsX(), hist.merged_histograms[region][proc].GetBinContent(hist.merged_histograms[region][proc].GetNbinsX() + 1))
+                    temp_hist.SetBinError(temp_hist.GetNbinsX(), hist.merged_histograms[region][proc].GetBinError(hist.merged_histograms[region][proc].GetNbinsX() + 1))
+                    hist.merged_histograms[region][proc].SetBinContent(hist.merged_histograms[region][proc].GetNbinsX() + 1, 0)
+                    hist.merged_histograms[region][proc].SetBinError(hist.merged_histograms[region][proc].GetNbinsX() + 1, 0)
+                hist.merged_histograms[region][proc].Add(temp_hist)
 
 
     def _make_plots(self) -> None:
@@ -400,13 +425,26 @@ class Plotter:
 
     def _make_2D_plots(self) -> None:
         """ Create and save all 2D plots."""
+        """
+        # Create custom palette
+        import array
+        ncontours = 100
+        stops = array.array('d', [0.0, 0.001, 1.0])
+        red = array.array('d', [1.0, 0.0, 0.0])     # White -> Blue gradient
+        green = array.array('d', [1.0, 0.0, 0.0])
+        blue = array.array('d', [1.0, 1.0, 0.3])
+
+        ROOT.TColor.CreateGradientColorTable(len(stops), stops, red, green, blue, ncontours)
+        ROOT.gStyle.SetNumberContours(ncontours)
+        """
+
         for hist in self.histograms2D:
             for region in hist.merged_histograms:
                 for proc in hist.merged_histograms[region]:
                     # Create canvas
                     canvas_name = f"canvas_{hist.name}_{region}"
                     canvas = ROOT.TCanvas(canvas_name, canvas_name, 1000, 800)
-                    canvas.SetRightMargin(0.20) #TODO: configure canvas function
+                    canvas.SetRightMargin(0.20)
                     if hist.log_x:
                         canvas.SetLogx()
                     if hist.log_y:
@@ -417,6 +455,7 @@ class Plotter:
 
                     # Format histogram
                     h = hist.merged_histograms[region][proc]
+                    h.SetMinimum(0.001)  # Set white below this value
                     h.Draw("COLZ")
 
                     # Configure axes
@@ -465,7 +504,7 @@ class Plotter:
         return upper_pad, lower_pad
 
 
-    def _format_hists(self, merged_hists: Dict[str, ROOT.TH1F]) -> None:
+    def _format_hists(self, merged_hists: Dict[str, ROOT.TH1D]) -> None:
         """Format histograms."""
         for proc_name, h in merged_hists.items():
 
@@ -494,7 +533,7 @@ class Plotter:
                 h.SetLineColor(proc.color)
 
 
-    def _separate_hists(self, merged_hists: Dict[str, ROOT.TH1F]) -> Tuple[List[ROOT.TH1F], List[ROOT.TH1F]]:
+    def _separate_hists(self, merged_hists: Dict[str, ROOT.TH1D]) -> Tuple[List[ROOT.TH1D], List[ROOT.TH1D]]:
         """Separate stacked and unstacked processes."""
         stacked_hists = []
         unstacked_hists = []
@@ -511,7 +550,7 @@ class Plotter:
         return stacked_hists, unstacked_hists
 
 
-    def _draw_stack(self, hist: Histogram, stacked_hists: List[Tuple[Process, ROOT.TH1F]], legend: ROOT.TLegend) -> Tuple[ROOT.THStack, ROOT.TH1F]:
+    def _draw_stack(self, hist: Histogram, stacked_hists: List[Tuple[Process, ROOT.TH1D]], legend: ROOT.TLegend) -> Tuple[ROOT.THStack, ROOT.TH1D]:
         """Draw stack. The stack and total histogram must be returned for ROOT to draw them."""
         if not stacked_hists: return None, None
 
@@ -541,7 +580,7 @@ class Plotter:
         return stack, total_hist
 
 
-    def _draw_unstacked_hists(self, unstacked_hists: List[Tuple[Process, ROOT.TH1F]], legend: ROOT.TLegend) -> List[ROOT.TH1F]:
+    def _draw_unstacked_hists(self, unstacked_hists: List[Tuple[Process, ROOT.TH1D]], legend: ROOT.TLegend) -> List[ROOT.TH1D]:
         """Draw unstacked histograms."""
         if not unstacked_hists: return []
 
@@ -568,7 +607,7 @@ class Plotter:
         return cached_hists
 
 
-    def _configure_axes(self, hist: Union[Histogram, Histogram2D], blueprint: Union[ROOT.TH1F, ROOT.TH2F], max_height: Optional[float] = None) -> None:
+    def _configure_axes(self, hist: Union[Histogram, Histogram2D], blueprint: Union[ROOT.TH1D, ROOT.TH2D], max_height: Optional[float] = None) -> None:
         """Configure axis properties consistently."""
 
         # Set axis labels
@@ -635,7 +674,7 @@ class Plotter:
         label.DrawLatex(x + spacing, y, text)
 
     
-    def _draw_ratio_points(self, hist, h_num, h_den) -> Tuple[ROOT.TH1F, ROOT.TH1F, ROOT.TLine]:
+    def _draw_ratio_points(self, hist, h_num, h_den) -> Tuple[ROOT.TH1D, ROOT.TH1D, ROOT.TLine]:
         """Draw ratio points using numerator process' style."""
 
         # Create ratio histogram
