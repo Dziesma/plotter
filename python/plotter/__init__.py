@@ -1,7 +1,7 @@
 from .plotter import Plotter
 from .region import Region
 from .process import Process
-from .histogram import Histogram, RatioConfig
+from .histogram import Histogram, Histogram2D, RatioConfig
 from .styles import Style
 
 __all__ = [
@@ -9,6 +9,7 @@ __all__ = [
     "Region",
     "Process",
     "Histogram",
+    "Histogram2D",
     "RatioConfig",
     "Style"
 ]

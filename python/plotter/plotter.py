@@ -1,9 +1,9 @@
-from typing import Optional, List, Dict, Tuple
+from typing import Optional, List, Dict, Tuple, Union
 import ROOT
 import os
 import logging
 from .region import Region
-from .histogram import Histogram
+from .histogram import Histogram, Histogram2D
 from .process import Process, ProcessTemplate
 from .styles import Style
 from .logger import package_logger
@@ -28,6 +28,7 @@ class Plotter:
         # Set up processes and histograms
         self.regions: List[Region] = []
         self.histograms: List[Histogram] = []
+        self.histograms2D: List[Histogram2D] = []
         self.processes: List[Process] = []
         self.unique_processes: List[ProcessTemplate] = []
         self.output_dir = output_dir
@@ -50,17 +51,32 @@ class Plotter:
         self.logger.info(f"Added region {region.name} to plotter")
         
 
-    def add_histogram(self, histogram: Histogram) -> None:
+    def add_histogram(self, histogram: Union[Histogram, Histogram2D]) -> None:
         """Add a histogram configuration to the plotter."""
 
-        # Check if the histogram is already in the plotter
-        if histogram.name in [h.name for h in self.histograms]:
-            self.logger.warning(f"Histogram {histogram.name} already exists in plotter. Will overwrite existing histogram.")
-            self.histograms = [h for h in self.histograms if h.name != histogram.name]
+        if isinstance(histogram, Histogram):
+            # Check if the histogram is already in the plotter
+            if histogram.name in [h.name for h in self.histograms]:
+                self.logger.warning(f"Histogram {histogram.name} already exists in plotter. Will overwrite existing histogram.")
+                self.histograms = [h for h in self.histograms if h.name != histogram.name]
 
-        # Add the histogram to the plotter
-        self.histograms.append(histogram)
-        self.logger.info(f"Added histogram {histogram.name} to plotter")
+            # Add the histogram to the plotter
+            self.histograms.append(histogram)
+            self.logger.info(f"Added histogram {histogram.name} to plotter")
+
+        elif isinstance(histogram, Histogram2D):
+            # ratio config not yet implemented for 2D histograms
+            if histogram.ratio_config:
+                self.logger.warning(f"Ratio configuration for 2D histogram {histogram.name} is not yet implemented. Skipping ratio plot.")
+                histogram.ratio_config = None
+            # Check if the histogram is already in the plotter
+            if histogram.name in [h.name for h in self.histograms2D]:
+                self.logger.warning(f"Histogram {histogram.name} already exists in plotter. Will overwrite existing 2D histogram.")
+                self.histograms2D = [h for h in self.histograms2D if h.name != histogram.name]
+
+            # Add the histogram to the plotter
+            self.histograms2D.append(histogram)
+            self.logger.info(f"Added 2D histogram {histogram.name} to plotter")
 
     
     def add_process(self, process: Process) -> None:
@@ -105,12 +121,16 @@ class Plotter:
         self._make_hists()
 
         # Merge hists
-        for hist in self.histograms:
+        for hist in self.histograms + self.histograms2D:
             hist.merged_histograms = self._merge_hists(hist)
         self.logger.info("Histograms merged")
 
-        output_file = ROOT.TFile(os.path.join(self.output_dir, "merged_histograms.root"), "RECREATE")
+        # Add underflow and overflow to histograms
         for hist in self.histograms:
+            self._add_underflow_overflow(hist)
+
+        output_file = ROOT.TFile(os.path.join(self.output_dir, "merged_histograms.root"), "RECREATE")
+        for hist in self.histograms + self.histograms2D:
             for region in hist.merged_histograms:   
                 for proc in self.unique_processes:
                     if proc.name in hist.merged_histograms[region]:
@@ -119,7 +139,10 @@ class Plotter:
         self.logger.info("Merged histograms saved to merged_histograms.root")
 
         # Make plots
-        self._make_plots()
+        if self.histograms:
+            self._make_plots()
+        if self.histograms2D:
+            self._make_2D_plots()
         self.logger.info("All plots created")
 
 
@@ -183,7 +206,7 @@ class Plotter:
         for region in self.regions:
 
             # Filter histograms
-            histograms_to_use = self._filter_histograms(self.histograms, region.include_histograms, region.exclude_histograms)
+            histograms_to_use = self._filter_histograms(self.histograms + self.histograms2D, region.include_histograms, region.exclude_histograms)
             if not histograms_to_use:
                 self.logger.warning(f"No histograms found after filtering region {region.name}. Skipping region. This region is pointless")
                 continue
@@ -206,10 +229,6 @@ class Plotter:
                 # Loop over selected processes
                 for proc in processes_to_use:
 
-                    # Create histogram model
-                    hist_name = f"{region.name}_{hist.name}_{proc.name}"
-                    h_model = ROOT.RDF.TH1DModel(*((hist_name, "") + hist.binning))
-                    
                     # Apply selection if any
                     df = proc.df
                     if region.selection:
@@ -217,13 +236,26 @@ class Plotter:
                     
                     # Use process-specific weight if specified, otherwise use plotter weight
                     weight = proc.weight if proc.weight else self.weight
-                    
-                    # Add weight and variable as columns to the dataframe
                     df = df.Define("total_weight", weight)
-                    df = df.Define("plot_var", hist.variable)
-                    
-                    # Book histogram with defined columns
-                    h = df.Histo1D(h_model, "plot_var", "total_weight")
+
+                    # Create histogram name
+                    hist_name = f"{hist.name}_{region.name}_{proc.name}"
+
+                    # Book histogram depending on dimensionality
+                    if isinstance(hist, Histogram):
+                        h_model = ROOT.RDF.TH1DModel(*((hist_name, "") + hist.binning))
+                        df = df.Define("plot_var", hist.variable)
+                        h = df.Histo1D(h_model, "plot_var", "total_weight")
+                    elif isinstance(hist, Histogram2D):
+                        h_model = ROOT.RDF.TH2DModel(*((hist_name, "") + hist.binning_x + hist.binning_y))
+                        df = df.Define("plot_var_x", hist.variable_x)
+                        df = df.Define("plot_var_y", hist.variable_y)
+                        h = df.Histo2D(h_model, "plot_var_x", "plot_var_y", "total_weight")
+                    else:
+                        self.logger.error(f"Invalid histogram type: {type(hist)}. Skipping histogram.")
+                        continue
+
+                    # Add histogram to RDF.RunGraphs actions
                     actions.append(h)
                     
                     # Store in histogram object
@@ -263,7 +295,7 @@ class Plotter:
         return filtered_processes
 
 
-    def _merge_hists(self, hist: Histogram) -> Dict[str, ROOT.TH1F]:
+    def _merge_hists(self, hist: Union[Histogram, Histogram2D]) -> Dict[str, Union[ROOT.TH1D, ROOT.TH2D]]:
         """Merge histograms from processes with the same name."""
         merged = {}
         
@@ -281,6 +313,27 @@ class Plotter:
         #TODO: Check if merged hists are consistent with included/excluded histograms by regions/hists
 
         return merged
+
+
+    def _add_underflow_overflow(self, hist: Histogram) -> None:
+        """Add underflow and overflow to histograms."""
+        if not hist.underflow and not hist.overflow:
+            return
+        for region in hist.merged_histograms:
+            for proc in hist.merged_histograms[region]:
+                temp_hist = hist.merged_histograms[region][proc].Clone("temp")
+                temp_hist.Reset()
+                if hist.underflow:
+                    temp_hist.SetBinContent(1, hist.merged_histograms[region][proc].GetBinContent(0))
+                    temp_hist.SetBinError(1, hist.merged_histograms[region][proc].GetBinError(0))
+                    hist.merged_histograms[region][proc].SetBinContent(0, 0)
+                    hist.merged_histograms[region][proc].SetBinError(0, 0)
+                if hist.overflow:
+                    temp_hist.SetBinContent(temp_hist.GetNbinsX(), hist.merged_histograms[region][proc].GetBinContent(hist.merged_histograms[region][proc].GetNbinsX() + 1))
+                    temp_hist.SetBinError(temp_hist.GetNbinsX(), hist.merged_histograms[region][proc].GetBinError(hist.merged_histograms[region][proc].GetNbinsX() + 1))
+                    hist.merged_histograms[region][proc].SetBinContent(hist.merged_histograms[region][proc].GetNbinsX() + 1, 0)
+                    hist.merged_histograms[region][proc].SetBinError(hist.merged_histograms[region][proc].GetNbinsX() + 1, 0)
+                hist.merged_histograms[region][proc].Add(temp_hist)
 
 
     def _make_plots(self) -> None:
@@ -302,6 +355,8 @@ class Plotter:
                     canvas.SetRightMargin(0.12) #TODO: configure canvas function
                     if hist.log_y:
                         canvas.SetLogy()
+                    if hist.log_x:
+                        canvas.SetLogx()
                     canvas.cd()
 
                 # Format histograms, create blueprint histogram
@@ -324,7 +379,7 @@ class Plotter:
 
                 # Configure axes
                 max_height = max([h.GetMaximum() for h in cached_hists] + ([cached_stack_total.GetMaximum()] if cached_stack_total else []))
-                self._configure_axes(hist, blueprint, max_height)
+                self._configure_axes(hist, blueprint, max_height=max_height)
                 ROOT.gPad.RedrawAxis()
 
                 # Draw legend
@@ -363,9 +418,59 @@ class Plotter:
                         
                 # Save canvas
                 canvas.Update()
-                canvas.SaveAs(f"{self.output_dir}/{hist.name}_{region}.pdf")
+                canvas.SaveAs(os.path.join(self.output_dir, f"{hist.name}_{region}.pdf"))
                 canvas.Close()
                 self.logger.info(f"Plot saved: {hist.name}_{region}.pdf")
+
+
+    def _make_2D_plots(self) -> None:
+        """ Create and save all 2D plots."""
+        """
+        # Create custom palette
+        import array
+        ncontours = 100
+        stops = array.array('d', [0.0, 0.001, 1.0])
+        red = array.array('d', [1.0, 0.0, 0.0])     # White -> Blue gradient
+        green = array.array('d', [1.0, 0.0, 0.0])
+        blue = array.array('d', [1.0, 1.0, 0.3])
+
+        ROOT.TColor.CreateGradientColorTable(len(stops), stops, red, green, blue, ncontours)
+        ROOT.gStyle.SetNumberContours(ncontours)
+        """
+
+        for hist in self.histograms2D:
+            for region in hist.merged_histograms:
+                for proc in hist.merged_histograms[region]:
+                    # Create canvas
+                    canvas_name = f"canvas_{hist.name}_{region}"
+                    canvas = ROOT.TCanvas(canvas_name, canvas_name, 1000, 800)
+                    canvas.SetRightMargin(0.20)
+                    if hist.log_x:
+                        canvas.SetLogx()
+                    if hist.log_y:
+                        canvas.SetLogy()
+                    if hist.log_z:
+                        canvas.SetLogz()
+                    canvas.cd()
+
+                    # Format histogram
+                    h = hist.merged_histograms[region][proc]
+                    h.SetMinimum(0.001)  # Set white below this value
+                    h.Draw("COLZ")
+
+                    # Configure axes
+                    self._configure_axes(hist, h)
+
+                    # Move x-axis exponent that overlaps with z-axis
+                    ROOT.TGaxis.SetExponentOffset(0., -0.07, "x")
+
+                    # Save canvas
+                    canvas.SaveAs(os.path.join(self.output_dir, f"{h.GetName()}.pdf"))
+                    canvas.Close()
+
+                    # Return x-axis exponent offset to default
+                    ROOT.TGaxis.SetExponentOffset()
+                
 
 
     def _configure_pads(self, canvas: ROOT.TCanvas, hist: Histogram) -> Tuple[ROOT.TPad, ROOT.TPad]:
@@ -399,7 +504,7 @@ class Plotter:
         return upper_pad, lower_pad
 
 
-    def _format_hists(self, merged_hists: Dict[str, ROOT.TH1F]) -> None:
+    def _format_hists(self, merged_hists: Dict[str, ROOT.TH1D]) -> None:
         """Format histograms."""
         for proc_name, h in merged_hists.items():
 
@@ -428,7 +533,7 @@ class Plotter:
                 h.SetLineColor(proc.color)
 
 
-    def _separate_hists(self, merged_hists: Dict[str, ROOT.TH1F]) -> Tuple[List[ROOT.TH1F], List[ROOT.TH1F]]:
+    def _separate_hists(self, merged_hists: Dict[str, ROOT.TH1D]) -> Tuple[List[ROOT.TH1D], List[ROOT.TH1D]]:
         """Separate stacked and unstacked processes."""
         stacked_hists = []
         unstacked_hists = []
@@ -445,7 +550,7 @@ class Plotter:
         return stacked_hists, unstacked_hists
 
 
-    def _draw_stack(self, hist: Histogram, stacked_hists: List[Tuple[Process, ROOT.TH1F]], legend: ROOT.TLegend) -> Tuple[ROOT.THStack, ROOT.TH1F]:
+    def _draw_stack(self, hist: Histogram, stacked_hists: List[Tuple[Process, ROOT.TH1D]], legend: ROOT.TLegend) -> Tuple[ROOT.THStack, ROOT.TH1D]:
         """Draw stack. The stack and total histogram must be returned for ROOT to draw them."""
         if not stacked_hists: return None, None
 
@@ -475,7 +580,7 @@ class Plotter:
         return stack, total_hist
 
 
-    def _draw_unstacked_hists(self, unstacked_hists: List[Tuple[Process, ROOT.TH1F]], legend: ROOT.TLegend) -> List[ROOT.TH1F]:
+    def _draw_unstacked_hists(self, unstacked_hists: List[Tuple[Process, ROOT.TH1D]], legend: ROOT.TLegend) -> List[ROOT.TH1D]:
         """Draw unstacked histograms."""
         if not unstacked_hists: return []
 
@@ -502,12 +607,14 @@ class Plotter:
         return cached_hists
 
 
-    def _configure_axes(self, hist, blueprint, max_height: float) -> None:
+    def _configure_axes(self, hist: Union[Histogram, Histogram2D], blueprint: Union[ROOT.TH1D, ROOT.TH2D], max_height: Optional[float] = None) -> None:
         """Configure axis properties consistently."""
 
         # Set axis labels
         blueprint.GetXaxis().SetTitle(hist.x_label)
         blueprint.GetYaxis().SetTitle(hist.y_label)
+        if type(hist) == Histogram2D:
+            blueprint.GetZaxis().SetTitle(hist.z_label)
         
         # Y-axis settings
         blueprint.GetYaxis().SetLabelSize(0.045)
@@ -522,21 +629,30 @@ class Plotter:
             blueprint.GetXaxis().SetLabelSize(0.045)
             blueprint.GetXaxis().SetTitleSize(0.05)
         
+        # Z-axis settings
+        if type(hist) == Histogram2D:
+            blueprint.GetZaxis().SetLabelSize(0.045)
+            blueprint.GetZaxis().SetTitleSize(0.05)
+            blueprint.GetZaxis().SetTitleOffset(1.5)
+
         # Prevent label overlap
         blueprint.GetXaxis().SetMaxDigits(3)
-        if hist.log_y:
-            blueprint.GetYaxis().SetMaxDigits(3)
-            blueprint.GetYaxis().SetNdivisions(505)
-        else:
-            blueprint.GetYaxis().SetNdivisions(510)
+        blueprint.GetYaxis().SetMaxDigits(3)
+        if type(hist) == Histogram2D:
+            blueprint.GetZaxis().SetMaxDigits(3)
+        blueprint.GetXaxis().SetNdivisions(505)
+        blueprint.GetYaxis().SetNdivisions(505)
+        if type(hist) == Histogram2D:
+            blueprint.GetZaxis().SetNdivisions(505)
         
         # Set maximum and minimum to avoid legend overlap
-        if hist.y_min is not None:
-            blueprint.SetMinimum(hist.y_min)
-        if hist.log_y:
-            blueprint.SetMaximum(max_height * 10)
-        else:
-            blueprint.SetMaximum(max_height * 1.4)
+        if max_height:
+            if hist.y_min is not None:
+                blueprint.SetMinimum(hist.y_min)
+            if hist.log_y:
+                blueprint.SetMaximum(max_height * 10)
+            else:
+                blueprint.SetMaximum(max_height * 1.4)
 
 
     def _draw_atlas_label(self, text: str = "Internal", x: float = 0.2, y: float = 0.85, has_ratio: bool = False) -> None:
@@ -558,7 +674,7 @@ class Plotter:
         label.DrawLatex(x + spacing, y, text)
 
     
-    def _draw_ratio_points(self, hist, h_num, h_den) -> Tuple[ROOT.TH1F, ROOT.TH1F, ROOT.TLine]:
+    def _draw_ratio_points(self, hist, h_num, h_den) -> Tuple[ROOT.TH1D, ROOT.TH1D, ROOT.TLine]:
         """Draw ratio points using numerator process' style."""
 
         # Create ratio histogram

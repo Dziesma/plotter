@@ -1,4 +1,4 @@
-from plotter import Plotter, Region, Histogram, RatioConfig, Process, Style
+from plotter import Plotter, Region, Histogram, Histogram2D, RatioConfig, Process, Style
 import ROOT
 
 
@@ -114,6 +114,17 @@ mass_hist = Histogram(
     ratio_config=ratio_config
 )
 
+mass_res_hist = Histogram2D(
+    name="mass_resolution",
+    variable_x="truth_mLepJet",
+    variable_y="mLepJet",
+    binning_x=(33, 700., 4000.),
+    binning_y=(33, 700., 4000.),
+    x_label="Truth m_{lj} [GeV]",
+    y_label="Reco m_{lj} [GeV]",
+    log_z=True
+)
+
 
 # Create regions
 nominal_region = Region(
@@ -128,7 +139,7 @@ w_veto_region = Region(
 
 
 # Create plotter and add processes and histograms
-plotter = Plotter(weight="mcEventWeight*weight_gen*weight_lumi*weight_norm*weight_singleleptonTrigSF*weight_lepton*weight_pileup*weight_btag*weight_jvt*beamSpotWeight", output_dir="test", n_threads=8)
+plotter = Plotter(weight="mcEventWeight*weight_gen*weight_lumi*weight_norm*weight_singleleptonTrigSF*weight_lepton*weight_pileup*weight_btag*weight_jvt*beamSpotWeight", output_dir="test", n_threads=16)
 
 plotter.add_process(Wjets_mc23a_no_veto)
 plotter.add_process(Wjets_mc23d_no_veto)
@@ -141,6 +152,7 @@ plotter.add_process(Zjets_mc23d_w_veto)
 
 plotter.add_histogram(pt_hist)
 plotter.add_histogram(mass_hist)
+plotter.add_histogram(mass_res_hist)
 
 plotter.add_region(nominal_region)
 plotter.add_region(w_veto_region)
