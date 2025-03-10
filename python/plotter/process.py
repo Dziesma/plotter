@@ -1,8 +1,7 @@
 from typing import Optional, List, Union
-import ROOT
 import os
 from .logger import package_logger
-from .styles import Style
+from .constants import Style
 
 
 class ProcessTemplate:

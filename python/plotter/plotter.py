@@ -5,7 +5,7 @@ import logging
 from .region import Region
 from .histogram import Histogram, Histogram2D
 from .process import Process, ProcessTemplate
-from .styles import Style
+from .constants import Style
 from .logger import package_logger
 
 
@@ -66,9 +66,9 @@ class Plotter:
 
         elif isinstance(histogram, Histogram2D):
             # ratio config not yet implemented for 2D histograms
-            if histogram.ratio_config:
-                self.logger.warning(f"Ratio configuration for 2D histogram {histogram.name} is not yet implemented. Skipping ratio plot.")
-                histogram.ratio_config = None
+            if histogram.panel:
+                self.logger.warning(f"Panel configuration for 2D histogram {histogram.name} is not yet implemented. Skipping panel plot.")
+                histogram.panel = None
             # Check if the histogram is already in the plotter
             if histogram.name in [h.name for h in self.histograms2D]:
                 self.logger.warning(f"Histogram {histogram.name} already exists in plotter. Will overwrite existing 2D histogram.")
@@ -346,7 +346,7 @@ class Plotter:
                 canvas = ROOT.TCanvas(canvas_name, canvas_name, 800, 900)
 
                 # Configure pads/canvas
-                if hist.ratio_config:
+                if hist.panel:
                     upper_pad, lower_pad = self._configure_pads(canvas, hist)
                     if not upper_pad or not lower_pad:
                         continue
@@ -386,34 +386,50 @@ class Plotter:
                 legend.Draw()
                 
                 # Draw ATLAS label
-                self._draw_atlas_label(has_ratio=bool(hist.ratio_config))
+                self._draw_atlas_label(has_ratio=bool(hist.panel))
                 
                 # Handle ratio plot if configured
-                if hist.ratio_config:
+                if hist.panel:
                     lower_pad.cd()
                     
-                    # Retrieve numerator histogram
-                    if hist.ratio_config.numerator == "stack":
-                        h_num = cached_stack_total.Clone()
-                    else:
-                        h_num = next(hist.merged_histograms[region][p.name] for p in self.unique_processes if p.name == hist.ratio_config.numerator)
-                        if not h_num:
-                            self.logger.error(f"Numerator process {hist.ratio_config.numerator} not found in merged histograms for hist {hist.name}")
+                    # Loop over panel elements
+                    for element in hist.panel.elements:
 
-                    # Retrieve denominator histogram
-                    if hist.ratio_config.denominator == "stack":
-                        h_den = cached_stack_total.Clone()
-                    else:
-                        h_den = next(hist.merged_histograms[region][p.name] for p in self.unique_processes if p.name == hist.ratio_config.denominator)
-                        if not h_den:
-                            self.logger.error(f"Denominator process {hist.ratio_config.denominator} not found in merged histograms for hist {hist.name}")
-        
-                    # Draw ratio histogram and configure axes
-                    if h_num and h_den:
-                        cached_ratio, cached_stack_ratio_errors, line = self._draw_ratio_points(hist, h_num, h_den)
-                        self._configure_ratio_axes(cached_ratio, hist)
-                    else:
-                        self.logger.error(f"Ratio configuration for hist {hist.name} is invalid. Skipping ratio plot.")
+                        # Retrieve histograms for each value
+                        value_hists = []
+                        for value in element.values:
+                            if value == "stack":
+                                value_hists.append(cached_stack_total.Clone())
+                            else:
+                                value_hists.append(next((hist.merged_histograms[region][p.name] for p in self.unique_processes if p.name == value), None))
+                                if not value_hists[-1]:
+                                    self.logger.error(f"Process {value} not found in merged histograms for hist {hist.name}")
+                                    continue
+                        if not all(value_hists):
+                            self.logger.error(f"Skipping panel element as one or more histograms could not be retrieved.")
+                            continue
+
+                        # Apply function to get the histogram for the panel element
+                        element.histogram = element.func(tuple(value_hists))
+
+                    # Draw panel
+                    panel_blueprint = hist.panel.elements[0].histogram.Clone()
+                    panel_blueprint.Reset()
+                    panel_blueprint.Draw()
+                    self._configure_panel_axes(panel_blueprint, hist)
+
+                    # Draw elements
+                    cached_panel_hists = []
+                    for element in hist.panel.elements:
+                        cached_panel_hists.append(self._draw_panel_element(element))
+
+                    # Draw reference line(s)
+                    lines = []
+                    for line_height, line_color in zip(hist.panel.reference_line_heights, hist.panel.reference_line_colors):
+                        lines.append(ROOT.TLine(panel_blueprint.GetXaxis().GetXmin(), line_height, panel_blueprint.GetXaxis().GetXmax(), line_height))
+                        lines[-1].SetLineStyle(2)
+                        lines[-1].SetLineColor(line_color)
+                        lines[-1].Draw("SAME")
                     ROOT.gPad.RedrawAxis()
                         
                 # Save canvas
@@ -622,7 +638,7 @@ class Plotter:
         blueprint.GetYaxis().SetTitleOffset(1.5)
         
         # X-axis settings depend on ratio
-        if hist.ratio_config:
+        if hist.panel:
             blueprint.GetXaxis().SetLabelSize(0)
             blueprint.GetXaxis().SetTitleSize(0)
         else:
@@ -674,67 +690,44 @@ class Plotter:
         label.DrawLatex(x + spacing, y, text)
 
     
-    def _draw_ratio_points(self, hist, h_num, h_den) -> Tuple[ROOT.TH1D, ROOT.TH1D, ROOT.TLine]:
-        """Draw ratio points using numerator process' style."""
+    def _draw_panel_element(self, element) -> ROOT.TH1D:
+        """Draw ratio points."""
 
-        # Create ratio histogram
-        h_ratio = h_num.Clone("ratio")
-        h_ratio.Divide(h_num, h_den, 1.0, 1.0, hist.ratio_config.error_option) #TODO: error_option not using denominator error
-
-        # Draw ratio histogram
-        if hist.ratio_config.numerator == "stack":
-            h_ratio.SetMarkerColor(ROOT.kGray)
-            if not hist.error_bars:
-                h_ratio.Draw("P")
-            else:
-                h_ratio.Draw("E X0 P")
+        # Setup draw options. Default color should be color of 1st agrument of the element.
+        if element.color:
+            element.histogram.SetMarkerColor(element.color)
+        draw_options = ""
+        if element.style == Style.POINTS:
+            draw_options += "P"
+        elif element.style == Style.LINE:
+            draw_options += "HIST"
+        elif element.style == Style.STACKED:
+            draw_options += "E2"
+            element.histogram.SetFillColor(element.color if element.color else element.histogram.GetLineColor())
+            element.histogram.SetFillStyle(3004)
+            element.histogram.SetMarkerStyle(0)
+            element.histogram.SetMarkerSize(0)
         else:
-            proc = next(p for p in self.unique_processes if p.name == hist.ratio_config.numerator)
-            error_option = " E X0" if proc.error_bars else ""
-            if proc.style == Style.LINE:
-                h_ratio.Draw("HIST" + error_option)
-            elif proc.style == Style.POINTS:
-                h_ratio.Draw("P" + error_option)
-            elif proc.style == Style.STACKED:
-                self.logger.warning(f"Stacked style found for a ratio plot, will draw in style {Style.LINE}.")
-                h_ratio.Draw("HIST" + error_option)
-            else:
-                self.logger.error(f"Invalid style: {proc.style}. Drawing with style: {Style.LINE}.")
-                h_ratio.Draw("HIST" + error_option)
+            self.logger.error(f"Unsupported style: {element.style} for panel element. Drawing in style {Style.LINE}.")
+            draw_options += "HIST"
 
-        # Draw relative stack errors centered at 1.0 if denominator is stack
-        h_stack_errors, line = None, None
-        if hist.error_bars and hist.ratio_config.denominator == "stack":
+        # Setup draw options for errors if configured
+        if element.error_bars and element.style != Style.STACKED:
+            draw_options += " E X0"
 
-            # Create stack error histogram
-            h_stack_errors = h_den.Clone()
-            for i in range(1, h_stack_errors.GetNbinsX() + 1):
-                if h_stack_errors.GetBinContent(i) > 0:
-                    h_stack_errors.SetBinContent(i, 1.0)
-                    h_stack_errors.SetBinError(i, h_den.GetBinError(i) / h_den.GetBinContent(i))
+        # Draw histogram
+        element.histogram.Draw(draw_options + " SAME")
 
-            # Draw hashed stack error histogram
-            h_stack_errors.SetFillColor(ROOT.kBlack)
-            h_stack_errors.SetFillStyle(3004)
-            h_stack_errors.SetMarkerStyle(0)
-            h_stack_errors.SetMarkerSize(0)
-            h_stack_errors.Draw("E2 SAME")
-    
-            # Draw horizontal line at 1
-            line = ROOT.TLine(h_stack_errors.GetXaxis().GetXmin(), 1, h_stack_errors.GetXaxis().GetXmax(), 1)
-            line.SetLineStyle(2)
-            line.Draw("SAME")
-
-        return h_ratio, h_stack_errors, line
+        return element.histogram
     
     
-    def _configure_ratio_axes(self, h_ratio, hist) -> None:
+    def _configure_panel_axes(self, h_ratio, hist) -> None:
         """Configure ratio plot axes."""
         
         # Set axis labels and ranges
         h_ratio.GetXaxis().SetTitle(hist.x_label)
-        h_ratio.GetYaxis().SetTitle(hist.ratio_config.y_label)
-        h_ratio.GetYaxis().SetRangeUser(hist.ratio_config.y_min, hist.ratio_config.y_max)
+        h_ratio.GetYaxis().SetTitle(hist.panel.y_label)
+        h_ratio.GetYaxis().SetRangeUser(hist.panel.y_min, hist.panel.y_max)
         
         # Adjust sizes for ratio panel
         h_ratio.GetXaxis().SetLabelSize(0.10)
