@@ -1,4 +1,4 @@
-from plotter import Plotter, Region, Histogram, Histogram2D, RatioConfig, Process, Style
+from plotter import Plotter, Region, Histogram, Histogram2D, Panel, PanelElement, Process, Style
 import ROOT
 
 
@@ -79,15 +79,32 @@ Zjets_mc23d_w_veto = Process(
     error_bars=True
 )
 
+# Create panel elements
+efficiency = PanelElement(
+    values=("Run3_w_veto", "stack"),
+    func=PanelElement._divide,
+    color=ROOT.kGreen,
+    style=Style.POINTS,
+    error_bars=True
+)
 
-# Create ratio configuration
-ratio_config = RatioConfig(
-    numerator="Run3_w_veto",
-    denominator="stack",
+stat_error = PanelElement(
+    values=("stack",),
+    func=PanelElement._error_band,
+    color=ROOT.kBlack,
+    style=Style.STACKED,
+    error_bars=True
+)
+
+
+# Create panel configuration
+panel = Panel( #TODO: need "B" for binomial error propagation for efficiency
+    elements=[efficiency, stat_error],
     y_label="veto eff.",
     y_min=0.9,
     y_max=1.1,
-    error_option="B"  # "B" for binomial, "" for standard error propagation
+    reference_line_heights=[1.0],
+    reference_line_colors=[ROOT.kBlack],
 )
 
 
@@ -100,7 +117,7 @@ pt_hist = Histogram(
     y_min=1.0,
     log_y=True,
     error_bars = True,
-    ratio_config=ratio_config
+    panel=panel
 )
 
 mass_hist = Histogram(
@@ -111,7 +128,7 @@ mass_hist = Histogram(
     y_min=1.0,
     log_y=True,
     error_bars = True,
-    ratio_config=ratio_config
+    panel=panel
 )
 
 mass_res_hist = Histogram2D(

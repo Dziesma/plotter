@@ -1,6 +1,5 @@
-from typing import Optional, List, Dict
-from .process import Process
-from .histogram import Histogram
+from typing import Optional, List
+
 
 class Region:
     def __init__(self,
