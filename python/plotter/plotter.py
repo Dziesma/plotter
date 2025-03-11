@@ -386,7 +386,7 @@ class Plotter:
                 legend.Draw()
                 
                 # Draw ATLAS label
-                self._draw_atlas_label(has_ratio=bool(hist.panel))
+                self._draw_atlas_label(tag=hist.tag, ecm=hist.ecm, lumi=hist.lumi, extra_tag=hist.extra_tag, has_panel=bool(hist.panel))
                 
                 # Handle ratio plot if configured
                 if hist.panel:
@@ -479,6 +479,9 @@ class Plotter:
 
                     # Move x-axis exponent that overlaps with z-axis
                     ROOT.TGaxis.SetExponentOffset(0., -0.07, "x")
+
+                    # Draw ATLAS label
+                    self._draw_atlas_label(tag=hist.tag, ecm=hist.ecm, lumi=hist.lumi, extra_tag=hist.extra_tag, has_panel=bool(hist.panel))
 
                     # Save canvas
                     canvas.SaveAs(os.path.join(self.output_dir, f"{h.GetName()}.pdf"))
@@ -666,28 +669,36 @@ class Plotter:
             if hist.y_min is not None:
                 blueprint.SetMinimum(hist.y_min)
             if hist.log_y:
-                blueprint.SetMaximum(max_height * 10)
+                blueprint.SetMaximum((max_height - hist.y_min)**1.4)
             else:
                 blueprint.SetMaximum(max_height * 1.4)
 
 
-    def _draw_atlas_label(self, text: str = "Internal", x: float = 0.2, y: float = 0.85, has_ratio: bool = False) -> None:
+    def _draw_atlas_label(self, x: float = 0.2, y: float = 0.85, tag: str = "Internal", lumi: str = "140", ecm: str = "13", extra_tag: str = "", has_panel: bool = False) -> None:
         """Draw ATLAS label."""
+
+        spacing = 0.045 if has_panel else 0.03
         label = ROOT.TLatex()
         label.SetNDC()
-        label.SetTextFont(72)
+        label.SetTextFont(43)
+        label.SetTextSize(24)
+        label.SetTextAlign(11)            
+        label.DrawLatex(x, y, "#font[72]{ATLAS} " + tag)
+
+        lumi_label = ROOT.TLatex()
+        lumi_label.SetNDC()
+        lumi_label.SetTextFont(43)
+        lumi_label.SetTextSize(24)
+        lumi_label.SetTextAlign(11)
+        lumi_label.DrawLatex(x, y - spacing, "#sqrt{s} = " + ecm + " TeV, L = " + lumi + " fb^{-1}")
         
-        # Adjust text size based on pad type
-        if has_ratio:
-            label.SetTextSize(0.06)  # Slightly smaller than before
-            spacing = 0.15  # Increased spacing for ratio plots
-        else:
-            label.SetTextSize(0.05)  # Original size for single pad
-            spacing = 0.17  # Original spacing for single pad
-            
-        label.DrawLatex(x, y, "ATLAS")
-        label.SetTextFont(42)
-        label.DrawLatex(x + spacing, y, text)
+        if extra_tag:
+            extra_label = ROOT.TLatex()
+            extra_label.SetNDC()
+            extra_label.SetTextFont(43)
+            extra_label.SetTextSize(24)
+            extra_label.SetTextAlign(11)
+            extra_label.DrawLatex(x, y - 2*spacing, extra_tag)
 
     
     def _draw_panel_element(self, element) -> ROOT.TH1D:

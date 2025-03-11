@@ -94,6 +94,10 @@ class Histogram:
                  y_min: Optional[float] = None,
                  log_x: bool = False,
                  log_y: bool = False,
+                 tag: str = "Internal",
+                 ecm: str = "13",
+                 lumi: str = "140",
+                 extra_tag: str = "",
                  panel: Optional[Panel] = None,
                  underflow: bool = False,
                  overflow: bool = False,
@@ -112,6 +116,10 @@ class Histogram:
             y_min: Minimum y-axis value (optional)
             log_x: Use log scale for x-axis
             log_y: Use log scale for y-axis
+            tag: ATLAS tag
+            ecm: Center of mass energy
+            lumi: Luminosity
+            extra_tag: Extra tag
             panel: Panel configuration
             underflow: Draw underflow bin
             overflow: Draw overflow bin
@@ -127,6 +135,10 @@ class Histogram:
         self.y_min = y_min
         self.log_x = log_x
         self.log_y = log_y
+        self.tag = tag
+        self.ecm = ecm
+        self.lumi = lumi
+        self.extra_tag = extra_tag
         self.panel = panel
         self.underflow = underflow
         self.overflow = overflow
@@ -152,6 +164,10 @@ class Histogram2D:
                  log_x: bool = False,
                  log_y: bool = False,
                  log_z: bool = False,
+                 tag: str = "Internal",
+                 ecm: str = "13",
+                 lumi: str = "140",
+                 extra_tag: str = "",
                  panel: Optional[Panel] = None,
                  include_processes: Optional[List[str]] = None,
                  exclude_processes: Optional[List[str]] = None):
@@ -170,6 +186,10 @@ class Histogram2D:
             log_x: Use log scale for x-axis
             log_y: Use log scale for y-axis
             log_z: Use log scale for z-axis
+            tag: ATLAS tag
+            ecm: Center of mass energy
+            lumi: Luminosity
+            extra_tag: Extra tag
             panel: Panel configuration
             include_processes: List of process names to include (if None, include all)
             exclude_processes: List of process names to exclude (if None, exclude none)
@@ -185,6 +205,10 @@ class Histogram2D:
         self.log_x = log_x
         self.log_y = log_y
         self.log_z = log_z
+        self.tag = tag
+        self.ecm = ecm
+        self.lumi = lumi
+        self.extra_tag = extra_tag
         self.panel = panel
         self.include_processes = include_processes
         self.exclude_processes = exclude_processes
