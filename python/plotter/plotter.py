@@ -666,12 +666,9 @@ class Plotter:
         
         # Set maximum and minimum to avoid legend overlap
         if max_height:
-            if hist.y_min is not None:
-                blueprint.SetMinimum(hist.y_min)
-            if hist.log_y:
-                blueprint.SetMaximum((max_height - hist.y_min)**1.4)
-            else:
-                blueprint.SetMaximum(max_height * 1.4)
+            panel_min = hist.y_min if hist.y_min is not None else blueprint.GetYaxis().GetMinimum()
+            panel_max = (max_height - panel_min) * 1.4 if not hist.log_y else (max_height/panel_min)**1.4 * panel_min
+            blueprint.GetYaxis().SetRangeUser(panel_min, panel_max)
 
 
     def _draw_atlas_label(self, x: float = 0.2, y: float = 0.85, tag: str = "Internal", lumi: str = "140", ecm: str = "13", extra_tag: str = "", has_panel: bool = False) -> None:
