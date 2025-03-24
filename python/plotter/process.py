@@ -19,6 +19,7 @@ class Process(ProcessTemplate):
                  tree_name: str,
                  color: Optional[int] = 1,
                  weight: Optional[str] = None,
+                 extra_selection: Optional[str] = None,
                  style: Optional[str] = Style.STACKED,
                  error_bars: Optional[bool] = True,
                  label: Optional[str] = None):
@@ -46,6 +47,7 @@ class Process(ProcessTemplate):
         self.file_path = os.path.expandvars(file_path)
         self.tree_name = tree_name
         self.weight = weight
+        self.extra_selection = extra_selection
         
         # Create RDataFrame
         self.df = None

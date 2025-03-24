@@ -232,7 +232,10 @@ class Plotter:
                     # Apply selection if any
                     df = proc.df
                     if region.selection:
-                        df = df.Filter(region.selection)
+                        selection = region.selection
+                        if proc.extra_selection:
+                            selection += f" && {proc.extra_selection}"
+                        df = df.Filter(selection)
                     
                     # Use process-specific weight if specified, otherwise use plotter weight
                     weight = proc.weight if proc.weight else self.weight
