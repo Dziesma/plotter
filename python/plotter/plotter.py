@@ -415,6 +415,11 @@ class Plotter:
                         # Apply function to get the histogram for the panel element
                         element.histogram = element.func(tuple(value_hists))
 
+                        # Set errors to zero for the case of no error bars
+                        if not element.error_bars:
+                            for i in range(1, element.histogram.GetNbinsX() + 1):
+                                element.histogram.SetBinError(i, 0)
+
                     # Draw panel
                     panel_blueprint = hist.panel.elements[0].histogram.Clone()
                     panel_blueprint.Reset()
@@ -709,6 +714,8 @@ class Plotter:
             element.histogram.SetMarkerColor(element.color)
         draw_options = ""
         if element.style == Style.POINTS:
+            element.histogram.SetMarkerStyle(20)
+            element.histogram.SetMarkerSize(1.2)
             draw_options += "P"
         elif element.style == Style.LINE:
             draw_options += "HIST"
