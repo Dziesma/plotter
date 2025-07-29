@@ -8,6 +8,13 @@ from .process import Process, ProcessTemplate
 from .constants import Style
 from .logger import package_logger
 
+PANEL_RATIO = 0.3
+SCALE_FACTOR = (1 - PANEL_RATIO)/PANEL_RATIO
+TITLE_SIZE = 0.06
+TITLE_OFFSET = 1.1
+LABEL_SIZE = 0.06
+LEFT_MARGIN = 0.12
+
 
 class Plotter:
     def __init__(self, output_dir: Optional[str] = "plots", weight: Optional[str] = "1", log_level: Optional[int] = logging.INFO, n_threads: Optional[int] = 32):
@@ -183,7 +190,7 @@ class Plotter:
         # Margins
         style.SetPadTopMargin(0.05)
         style.SetPadBottomMargin(0.16)
-        style.SetPadLeftMargin(0.16)
+        style.SetPadLeftMargin(LEFT_MARGIN)
         style.SetPadRightMargin(0.08)
         
         # Font
@@ -346,7 +353,7 @@ class Plotter:
             for region in hist.merged_histograms:   
                 # Create canvas
                 canvas_name = f"canvas_{hist.name}_{region}"
-                canvas = ROOT.TCanvas(canvas_name, canvas_name, 800, 900)
+                canvas = ROOT.TCanvas(canvas_name, canvas_name, 800, 600)
 
                 # Configure pads/canvas
                 if hist.panel:
@@ -355,7 +362,7 @@ class Plotter:
                         continue
                     upper_pad.cd()
                 else:
-                    canvas.SetRightMargin(0.12) #TODO: configure canvas function
+                    canvas.SetRightMargin(0.08) #TODO: configure canvas function
                     if hist.log_y:
                         canvas.SetLogy()
                     if hist.log_x:
@@ -369,7 +376,7 @@ class Plotter:
                 blueprint.Draw()
 
                 # Create legend with adjusted position and size
-                legend = ROOT.TLegend(0.60, 0.70, 0.90, 0.92)
+                legend = ROOT.TLegend(0.60, 0.6, 0.90, 0.92)
                 legend.SetBorderSize(0)
                 legend.SetFillStyle(0)
 
@@ -395,6 +402,9 @@ class Plotter:
                 if hist.panel:
                     lower_pad.cd()
                     
+                    # Initialize y_max if automatic range finding enabled
+                    if not hist.panel.y_max: y_max = 0.
+
                     # Loop over panel elements
                     for element in hist.panel.elements:
 
@@ -420,10 +430,20 @@ class Plotter:
                             for i in range(1, element.histogram.GetNbinsX() + 1):
                                 element.histogram.SetBinError(i, 0)
 
+                        # Find the maximum if automatic range finding enabled
+                        if not hist.panel.y_max:
+                            for i in range(1, element.histogram.GetNbinsX() + 1):
+                                bin_content = element.histogram.GetBinContent(i)
+                                y_max = max(y_max, bin_content)
+
+                    # Set y-max
+                    if not hist.panel.y_max: y_max /= 0.9
+
                     # Draw panel
                     panel_blueprint = hist.panel.elements[0].histogram.Clone()
                     panel_blueprint.Reset()
                     panel_blueprint.Draw()
+                    panel_blueprint.GetYaxis().SetRangeUser(hist.panel.y_min, hist.panel.y_max if hist.panel.y_max else y_max)
                     self._configure_panel_axes(panel_blueprint, hist)
 
                     # Draw elements
@@ -504,23 +524,23 @@ class Plotter:
         """Configure pads."""
 
         # Configure upper pad
-        upper_pad = ROOT.TPad(f"upper_pad_{hist.name}", f"upper_pad_{hist.name}", 0, 0.3, 1, 1)
+        upper_pad = ROOT.TPad(f"upper_pad_{hist.name}", f"upper_pad_{hist.name}", 0, PANEL_RATIO, 1, 1)
         if not upper_pad:
             self.logger.error(f"Upper pad not created for histogram {hist.name}. Skipping plot.")
             return None, None
-        upper_pad.SetLeftMargin(0.16)
+        upper_pad.SetLeftMargin(LEFT_MARGIN)
         upper_pad.SetRightMargin(0.08)
-        upper_pad.SetBottomMargin(0.03)
+        upper_pad.SetBottomMargin(0.025)
         upper_pad.Draw()
 
         # Configure lower pad
-        lower_pad = ROOT.TPad(f"lower_pad_{hist.name}", f"lower_pad_{hist.name}", 0, 0, 1, 0.3)
+        lower_pad = ROOT.TPad(f"lower_pad_{hist.name}", f"lower_pad_{hist.name}", 0, 0, 1, PANEL_RATIO)
         if not lower_pad:
             self.logger.error(f"Lower pad not created for histogram {hist.name}. Skipping plot.")
             return None, None
-        lower_pad.SetLeftMargin(0.16)
+        lower_pad.SetLeftMargin(LEFT_MARGIN)
         lower_pad.SetRightMargin(0.08)
-        lower_pad.SetTopMargin(0.03)
+        lower_pad.SetTopMargin(0.025*SCALE_FACTOR)
         lower_pad.SetBottomMargin(0.35)
         lower_pad.Draw()
         
@@ -644,17 +664,17 @@ class Plotter:
             blueprint.GetZaxis().SetTitle(hist.z_label)
         
         # Y-axis settings
-        blueprint.GetYaxis().SetLabelSize(0.045)
-        blueprint.GetYaxis().SetTitleSize(0.05)
-        blueprint.GetYaxis().SetTitleOffset(1.5)
+        blueprint.GetYaxis().SetLabelSize(LABEL_SIZE)
+        blueprint.GetYaxis().SetTitleSize(TITLE_SIZE)
+        blueprint.GetYaxis().SetTitleOffset(TITLE_OFFSET*(1 - PANEL_RATIO))
         
         # X-axis settings depend on ratio
         if hist.panel:
             blueprint.GetXaxis().SetLabelSize(0)
             blueprint.GetXaxis().SetTitleSize(0)
         else:
-            blueprint.GetXaxis().SetLabelSize(0.045)
-            blueprint.GetXaxis().SetTitleSize(0.05)
+            blueprint.GetXaxis().SetLabelSize(LABEL_SIZE)
+            blueprint.GetXaxis().SetTitleSize(TITLE_SIZE)
         
         # Z-axis settings
         if type(hist) == Histogram2D:
@@ -675,14 +695,14 @@ class Plotter:
         # Set maximum and minimum to avoid legend overlap
         if max_height:
             panel_min = hist.y_min if hist.y_min is not None else blueprint.GetYaxis().GetMinimum()
-            panel_max = (max_height - panel_min) * 1.4 if not hist.log_y else (max_height/panel_min)**1.4 * panel_min
+            panel_max = (max_height - panel_min) * 1.7 if not hist.log_y else (max_height/panel_min)**1.7 * panel_min
             blueprint.GetYaxis().SetRangeUser(panel_min, panel_max)
 
 
     def _draw_atlas_label(self, x: float = 0.2, y: float = 0.85, tag: str = "Internal", lumi: str = "140", ecm: str = "13", extra_tag: str = "", has_panel: bool = False) -> None:
         """Draw ATLAS label."""
 
-        spacing = 0.045 if has_panel else 0.03
+        spacing = 0.08 if has_panel else 0.08*(1 - PANEL_RATIO)
         label = ROOT.TLatex()
         label.SetNDC()
         label.SetTextFont(43)
@@ -719,12 +739,15 @@ class Plotter:
             draw_options += "P"
         elif element.style == Style.LINE:
             draw_options += "HIST"
-        elif element.style == Style.STACKED:
+        elif element.style == Style.STACKED and element.error_bars:
             draw_options += "E2"
             element.histogram.SetFillColor(element.color if element.color else element.histogram.GetLineColor())
             element.histogram.SetFillStyle(3004)
             element.histogram.SetMarkerStyle(0)
             element.histogram.SetMarkerSize(0)
+        elif element.style == Style.STACKED and not element.error_bars:
+            self.logger.warning(f"Requested to draw stack panel element with no error bars. Stack panel elements are just error bars centered at 1 so this element will not be drawn.") 
+            return element.histogram
         else:
             self.logger.error(f"Unsupported style: {element.style} for panel element. Drawing in style {Style.LINE}.")
             draw_options += "HIST"
@@ -745,17 +768,18 @@ class Plotter:
         # Set axis labels and ranges
         h_ratio.GetXaxis().SetTitle(hist.x_label)
         h_ratio.GetYaxis().SetTitle(hist.panel.y_label)
-        h_ratio.GetYaxis().SetRangeUser(hist.panel.y_min, hist.panel.y_max)
+        #h_ratio.GetYaxis().SetRangeUser(hist.panel.y_min, hist.panel.y_max)
         
         # Adjust sizes for ratio panel
-        h_ratio.GetXaxis().SetLabelSize(0.10)
-        h_ratio.GetXaxis().SetTitleSize(0.12)
-        h_ratio.GetYaxis().SetLabelSize(0.10)
-        h_ratio.GetYaxis().SetTitleSize(0.11)
-        h_ratio.GetYaxis().SetTitleOffset(0.8)
+        h_ratio.GetXaxis().SetLabelSize(LABEL_SIZE*SCALE_FACTOR)
+        h_ratio.GetXaxis().SetTitleSize(TITLE_SIZE*SCALE_FACTOR)
+        h_ratio.GetXaxis().SetTitleOffset(TITLE_OFFSET)
+        h_ratio.GetYaxis().SetLabelSize(LABEL_SIZE*SCALE_FACTOR)
+        h_ratio.GetYaxis().SetTitleSize(TITLE_SIZE*SCALE_FACTOR)
+        h_ratio.GetYaxis().SetTitleOffset(TITLE_OFFSET*PANEL_RATIO)
         
         # Prevent label overlap
         h_ratio.GetXaxis().SetMaxDigits(3)
-        h_ratio.GetYaxis().SetMaxDigits(2)
+        #h_ratio.GetYaxis().SetMaxDigits(2)
         h_ratio.GetXaxis().SetNdivisions(505)
         h_ratio.GetYaxis().SetNdivisions(505)

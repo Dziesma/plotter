@@ -60,8 +60,8 @@ class Panel:
     def __init__(self,
                  elements: List[PanelElement],
                  y_label: str = "Ratio",
-                 y_min: float = 0.5,
-                 y_max: float = 1.5,
+                 y_min: float = 0.,
+                 y_max: Union[float, bool] = False,
                  reference_line_heights: List[float] = [],
                  reference_line_colors: List[int] = []):
         """
